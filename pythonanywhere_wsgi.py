@@ -2,13 +2,13 @@
 PythonAnywhere WSGI template for this project.
 
 Copy the contents of this file into the WSGI file shown on the
-PythonAnywhere Web tab, then replace YOUR_USERNAME with your account name.
+PythonAnywhere Web tab.
 """
 
 import os
 import sys
 
-project_home = "/home/YOUR_USERNAME/yifan"
+project_home = "/home/DeanChen/yifan"
 if project_home not in sys.path:
     sys.path.insert(0, project_home)
 

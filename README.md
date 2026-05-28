@@ -43,13 +43,19 @@ cp .env.example .env
 nano .env
 ```
 
-Set:
+Generate a secret key:
+
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+Set `.env`:
 
 ```text
 DJANGO_SECRET_KEY=<a long random secret>
 DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=<yourusername>.pythonanywhere.com
-DJANGO_CSRF_TRUSTED_ORIGINS=https://<yourusername>.pythonanywhere.com
+DJANGO_ALLOWED_HOSTS=DeanChen.pythonanywhere.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://DeanChen.pythonanywhere.com
 ```
 
 5. Prepare the database and static files:
@@ -63,15 +69,14 @@ python manage.py collectstatic
 
 - Add a new manual web app.
 - Choose the same Python version as the virtualenv.
-- Set virtualenv path to `/home/<yourusername>/.virtualenvs/yifan`.
+- Set virtualenv path to `/home/DeanChen/.virtualenvs/yifan`.
 - Edit the WSGI file and copy the contents of `pythonanywhere_wsgi.py`.
-- Replace `YOUR_USERNAME` with your PythonAnywhere username.
 
 7. Static files mapping on the Web tab:
 
 ```text
 URL: /static/
-Directory: /home/<yourusername>/yifan/staticfiles
+Directory: /home/DeanChen/yifan/staticfiles
 ```
 
 8. Reload the web app.
@@ -79,7 +84,7 @@ Directory: /home/<yourusername>/yifan/staticfiles
 Your app should be available at:
 
 ```text
-https://<yourusername>.pythonanywhere.com/
+https://DeanChen.pythonanywhere.com/
 ```
 
 ## NAS / LAN Preview
