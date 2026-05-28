@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    {% load static %}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>新生兒照護紀錄</title>
+    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}" />
+  </head>
+  <body>
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="icon-bottle" viewBox="0 0 24 24">
+        <path d="M10 2h4v4l2 2v11a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3V8l2-2V2Z" />
+        <path d="M9 6h6M8 12h8M8 16h8" />
+      </symbol>
+      <symbol id="icon-moon" viewBox="0 0 24 24">
+        <path d="M18.5 15.8A8 8 0 0 1 8.2 5.5 7.8 7.8 0 1 0 18.5 15.8Z" />
+      </symbol>
+      <symbol id="icon-diaper" viewBox="0 0 24 24">
+        <path d="M4 7h16v5c0 5-3 8-8 8s-8-3-8-8V7Z" />
+        <path d="M4 8l5 5M20 8l-5 5M9 18h6" />
+      </symbol>
+      <symbol id="icon-droplet" viewBox="0 0 24 24">
+        <path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11Z" />
+      </symbol>
+      <symbol id="icon-poop" viewBox="0 0 24 24">
+        <path d="M8 10c1-4 6-4 7.5-1 2.5.4 4.5 2.3 4.5 5 0 3.2-3 5-8 5s-8-1.8-8-5c0-2.4 1.7-4.2 4-4Z" />
+        <path d="M10 10c1.2-1.5 1.8-3 1-5 2.8 1 4.2 3.2 3.5 5M9 14h.01M15 14h.01M10 17c1.3.8 2.7.8 4 0" />
+      </symbol>
+      <symbol id="icon-heart" viewBox="0 0 24 24">
+        <path d="M12 21s-8-4.7-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 6.3-8 11-8 11Z" />
+      </symbol>
+      <symbol id="icon-ruler" viewBox="0 0 24 24">
+        <path d="M4 16 16 4l4 4L8 20l-4-4Z" />
+        <path d="M9 15l-2-2M12 12l-2-2M15 9l-2-2" />
+      </symbol>
+      <symbol id="icon-note" viewBox="0 0 24 24">
+        <path d="M6 3h9l3 3v15H6V3Z" />
+        <path d="M14 3v4h4M9 11h6M9 15h6" />
+      </symbol>
+    </svg>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="寶寶概要">
+        <section class="baby-card">
+          <div class="baby-photo" aria-hidden="true">
+            <span class="face-dot left"></span>
+            <span class="face-dot right"></span>
+            <span class="face-mouth"></span>
+            <span class="cheek left"></span>
+            <span class="cheek right"></span>
+          </div>
+          <div>
+            <p class="eyebrow">Baby Care Log</p>
+            <h1>新生兒照護紀錄</h1>
+            <p class="muted" id="todayLabel"></p>
+          </div>
+        </section>
+
+        <section class="nursery-note" aria-label="照護提醒">
+          <div class="moon-badge" aria-hidden="true"></div>
+          <div>
+            <strong>小小日常，都值得被記住</strong>
+            <p>用最快的方式留下餵奶、睡眠、尿布和身體狀態。</p>
+          </div>
+        </section>
+
+        <section class="profile-panel" aria-label="寶寶資料">
+          <label>
+            寶寶名字
+            <input id="babyName" type="text" placeholder="例如：依杋" />
+          </label>
+          <label>
+            出生日期
+            <input id="birthDate" type="date" />
+          </label>
+          <div class="age-box">
+            <span>目前年齡</span>
+            <strong id="babyAge">尚未設定</strong>
+          </div>
+        </section>
+
+        <section class="summary-list" aria-label="今日摘要">
+          <div>
+            <span>餵食</span>
+            <strong id="feedCount">0 次</strong>
+          </div>
+          <div>
+            <span>睡眠</span>
+            <strong id="sleepTotal">0 小時</strong>
+          </div>
+          <div>
+            <span>小便</span>
+            <strong id="peeCount">0 次</strong>
+          </div>
+          <div>
+            <span>大便</span>
+            <strong id="poopCount">0 次</strong>
+          </div>
+          <div>
+            <span>最近紀錄</span>
+            <strong id="lastRecord">無</strong>
+          </div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">今日照護</p>
+            <h2>快速記錄</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="ghost-button" id="exportButton" type="button" title="匯出 JSON">匯出</button>
+            <button class="ghost-button danger" id="clearButton" type="button" title="清除所有本機紀錄">清除</button>
+          </div>
+        </header>
+
+        <section class="entry-panel" aria-label="新增紀錄">
+          <div class="type-tabs" role="tablist" aria-label="紀錄類型">
+            <button class="type-tab is-active" data-type="feeding" type="button"><svg class="mini-icon"><use href="#icon-bottle"></use></svg>餵食</button>
+            <button class="type-tab" data-type="sleep" type="button"><svg class="mini-icon"><use href="#icon-moon"></use></svg>睡眠</button>
+            <button class="type-tab" data-type="diaper" type="button"><svg class="mini-icon"><use href="#icon-diaper"></use></svg>尿布</button>
+            <button class="type-tab" data-type="health" type="button"><svg class="mini-icon"><use href="#icon-heart"></use></svg>健康</button>
+            <button class="type-tab" data-type="growth" type="button"><svg class="mini-icon"><use href="#icon-ruler"></use></svg>成長</button>
+            <button class="type-tab" data-type="note" type="button"><svg class="mini-icon"><use href="#icon-note"></use></svg>備註</button>
+          </div>
+
+          <form id="recordForm" class="record-form">
+            <div class="form-grid">
+              <label>
+                時間
+                <input id="recordTime" name="time" type="datetime-local" required />
+              </label>
+              <label class="dynamic-field" data-for="feeding">
+                類型
+                <select id="feedKind" name="feedKind">
+                  <option value="母乳">母乳</option>
+                  <option value="配方奶">配方奶</option>
+                  <option value="瓶餵母乳">瓶餵母乳</option>
+                  <option value="副食品">副食品</option>
+                </select>
+              </label>
+              <label class="dynamic-field" data-for="feeding">
+                份量 / 分鐘
+                <input id="feedAmount" name="feedAmount" type="text" placeholder="例如：90 ml、左 12 分" />
+              </label>
+              <label class="dynamic-field" data-for="sleep">
+                睡眠長度
+                <input id="sleepMinutes" name="sleepMinutes" type="number" min="1" step="1" placeholder="分鐘" />
+              </label>
+              <label class="dynamic-field check-field" data-for="diaper">
+                <input id="pee" name="pee" type="checkbox" />
+                <span class="choice-card">
+                  <svg class="mini-icon"><use href="#icon-droplet"></use></svg>
+                  <strong>小便</strong>
+                </span>
+              </label>
+              <label class="dynamic-field check-field" data-for="diaper">
+                <input id="poop" name="poop" type="checkbox" />
+                <span class="choice-card">
+                  <svg class="mini-icon"><use href="#icon-poop"></use></svg>
+                  <strong>大便</strong>
+                </span>
+              </label>
+              <label class="dynamic-field poop-detail" data-for="diaper">
+                大便量
+                <select id="poopAmount" name="poopAmount" disabled>
+                  <option value="">未選擇</option>
+                  <option value="少量">少量</option>
+                  <option value="中等">中等</option>
+                  <option value="大量">大量</option>
+                  <option value="爆量">爆量</option>
+                </select>
+              </label>
+              <label class="dynamic-field poop-detail" data-for="diaper">
+                大便顏色
+                <select id="poopColor" name="poopColor" disabled>
+                  <option value="">未選擇</option>
+                  <option value="黃色">黃色</option>
+                  <option value="芥末黃">芥末黃</option>
+                  <option value="綠色">綠色</option>
+                  <option value="棕色">棕色</option>
+                  <option value="黑色">黑色</option>
+                  <option value="紅色">紅色</option>
+                  <option value="白色">白色</option>
+                </select>
+              </label>
+              <label class="dynamic-field" data-for="health">
+                體溫
+                <input id="temperature" name="temperature" type="number" min="34" max="42" step="0.1" placeholder="°C" />
+              </label>
+              <label class="dynamic-field" data-for="health">
+                狀況
+                <input id="symptom" name="symptom" type="text" placeholder="例如：咳嗽、吐奶、皮疹" />
+              </label>
+              <label class="dynamic-field" data-for="growth">
+                體重
+                <input id="weight" name="weight" type="number" min="0" step="0.01" placeholder="kg" />
+              </label>
+              <label class="dynamic-field" data-for="growth">
+                身高
+                <input id="height" name="height" type="number" min="0" step="0.1" placeholder="cm" />
+              </label>
+              <label class="wide">
+                備註
+                <textarea id="note" name="note" rows="3" placeholder="精神、哭鬧、用藥、特殊情況..."></textarea>
+              </label>
+            </div>
+            <button class="primary-button" type="submit">新增紀錄</button>
+          </form>
+        </section>
+
+        <section class="content-grid">
+          <section class="day-table-panel" aria-label="24 小時生理狀態表格">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">24H Chart</p>
+                <h2>今日生理狀態表</h2>
+              </div>
+              <span class="table-hint">橫向滑動可看全部欄位</span>
+            </div>
+            <div class="day-table-wrap">
+              <table class="day-table">
+                <thead>
+                  <tr>
+                    <th scope="col">時間</th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-bottle"></use></svg>餵食</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-moon"></use></svg>睡眠</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-droplet"></use></svg>小便</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-poop"></use></svg>大便</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-heart"></use></svg>健康</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-ruler"></use></svg>成長</span></th>
+                    <th scope="col"><span class="table-head"><svg class="mini-icon"><use href="#icon-note"></use></svg>備註</span></th>
+                  </tr>
+                </thead>
+                <tbody id="dayTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="timeline-panel" aria-label="紀錄時間軸">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Timeline</p>
+                <h2>照護時間軸</h2>
+              </div>
+              <select id="filterType" aria-label="篩選紀錄類型">
+                <option value="all">全部</option>
+                <option value="feeding">餵食</option>
+                <option value="sleep">睡眠</option>
+                <option value="diaper">尿布</option>
+                <option value="health">健康</option>
+                <option value="growth">成長</option>
+                <option value="note">備註</option>
+              </select>
+            </div>
+            <div id="recordsList" class="records-list"></div>
+          </section>
+
+          <section class="insights-panel" aria-label="照護洞察">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Insights</p>
+                <h2>今日觀察</h2>
+              </div>
+            </div>
+            <div class="insight-stack">
+              <div class="metric-tile">
+                <span>平均餵食間隔</span>
+                <strong id="feedGap">尚無資料</strong>
+              </div>
+              <div class="metric-tile">
+                <span>最長睡眠</span>
+                <strong id="longestSleep">尚無資料</strong>
+              </div>
+              <div class="metric-tile">
+                <span>最新體溫</span>
+                <strong id="latestTemp">尚無資料</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="{% static 'tracker/app.js' %}"></script>
+  </body>
+</html>
