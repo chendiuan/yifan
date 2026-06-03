@@ -5,8 +5,8 @@ from datetime import date
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import Baby, CareRecord
 
@@ -121,6 +121,19 @@ def api_record_detail(request, record_id):
     record = get_object_or_404(CareRecord, id=record_id, baby=get_baby())
     record.delete()
     return JsonResponse({"deleted": record_id})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def line_webhook(request):
+    data = read_json(request)
+    if data is None:
+        return HttpResponseBadRequest("Invalid JSON")
+
+    return JsonResponse({
+        "ok": True,
+        "events": len(data.get("events", [])),
+    })
 
 
 def parse_datetime(value):
