@@ -12,6 +12,12 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
+from .ai_parser import (
+    CareRecordParseError,
+    OpenAIConfigurationError,
+    parse_care_record_message,
+)
+from .line_client import LineConfigurationError, LineReplyError, reply_to_line
 from .models import Baby, CareRecord
 
 
@@ -140,6 +146,91 @@ def api_record_detail(request, record_id):
     return JsonResponse({"deleted": record_id})
 
 
+def create_record_from_parse_result(result):
+    return CareRecord.objects.create(
+        baby=get_baby(),
+        record_type=result["record_type"],
+        time=parse_datetime(result.get("time")),
+        note=str(result.get("note", "")).strip(),
+        feed_kind=str(result.get("feed_kind", "")).strip(),
+        feed_amount=str(result.get("feed_amount", "")).strip(),
+        sleep_minutes=parse_int(result.get("sleep_minutes")),
+        pee=bool(result.get("pee")),
+        poop=bool(result.get("poop")),
+        poop_amount=str(result.get("poop_amount", "")).strip(),
+        poop_color=str(result.get("poop_color", "")).strip(),
+        temperature=parse_decimal(result.get("temperature")),
+        symptom=str(result.get("symptom", "")).strip(),
+        weight=parse_decimal(result.get("weight")),
+        height=parse_decimal(result.get("height")),
+    )
+
+
+def format_created_reply(record):
+    parts = [
+        f"已記錄：{record.get_record_type_display()}",
+        timezone.localtime(record.time).strftime("%H:%M"),
+    ]
+
+    if record.feed_amount:
+        parts.append(record.feed_amount)
+    if record.sleep_minutes:
+        parts.append(f"{record.sleep_minutes} 分鐘")
+    if record.pee:
+        parts.append("有尿")
+    if record.poop:
+        parts.append("有便")
+    if record.temperature is not None:
+        parts.append(f"{record.temperature}°C")
+    if record.weight is not None:
+        parts.append(f"{record.weight}kg")
+    if record.height is not None:
+        parts.append(f"{record.height}cm")
+
+    return " ".join(parts)
+
+
+def safe_reply_to_line(reply_token, text, replier=reply_to_line):
+    if not reply_token:
+        return False
+
+    try:
+        return replier(reply_token, text)
+    except (LineConfigurationError, LineReplyError):
+        return False
+
+
+def handle_line_text_event(event, parser=parse_care_record_message, replier=reply_to_line):
+    message = event.get("message", {})
+    if event.get("type") != "message" or message.get("type") != "text":
+        return "ignored"
+
+    reply_token = event.get("replyToken", "")
+    text = message.get("text", "")
+
+    try:
+        result = parser(text)
+    except OpenAIConfigurationError:
+        safe_reply_to_line(reply_token, "AI 尚未設定完成，請先設定 OPENAI_API_KEY。", replier)
+        return "configuration_error"
+    except CareRecordParseError:
+        safe_reply_to_line(reply_token, "我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。", replier)
+        return "parse_error"
+
+    if result["action"] == "clarify":
+        question = result.get("clarification") or "你想記錄哪一項寶寶照護呢？"
+        safe_reply_to_line(reply_token, question, replier)
+        return "clarify"
+
+    if result["action"] == "ignore":
+        safe_reply_to_line(reply_token, "我目前只會幫忙記錄寶寶照護喔。", replier)
+        return "ignored"
+
+    record = create_record_from_parse_result(result)
+    safe_reply_to_line(reply_token, format_created_reply(record), replier)
+    return "created"
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def line_webhook(request):
@@ -159,6 +250,9 @@ def line_webhook(request):
     data = read_json(request)
     if data is None:
         return HttpResponseBadRequest("Invalid JSON")
+
+    for event in data.get("events", []):
+        handle_line_text_event(event)
 
     return JsonResponse({
         "ok": True,

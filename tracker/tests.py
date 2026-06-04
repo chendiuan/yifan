@@ -5,8 +5,13 @@ import json
 
 from django.test import Client, TestCase, override_settings
 
-from .ai_parser import CareRecordParseError, parse_care_record_message
+from .ai_parser import (
+    CareRecordParseError,
+    OpenAIConfigurationError,
+    parse_care_record_message,
+)
 from .models import CareRecord
+from .views import handle_line_text_event
 
 
 def line_signature(body, channel_secret):
@@ -162,5 +167,112 @@ class CareRecordParserTests(TestCase):
 
         with self.assertRaises(CareRecordParseError):
             parse_care_record_message("剛剛喝奶 90ml", client=client)
+
+
+class LineTextEventHandlerTests(TestCase):
+    def test_creates_record_and_replies_when_parser_returns_create_record(self):
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "feeding",
+                "time": "2026-06-04T09:15",
+                "note": "",
+                "feed_kind": "奶瓶",
+                "feed_amount": "90ml",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "created")
+        self.assertEqual(CareRecord.objects.count(), 1)
+        record = CareRecord.objects.get()
+        self.assertEqual(record.record_type, "feeding")
+        self.assertEqual(record.feed_amount, "90ml")
+        self.assertEqual(replies[0][0], "reply-token")
+        self.assertIn("已記錄", replies[0][1])
+        self.assertIn("90ml", replies[0][1])
+
+    def test_replies_with_clarification_without_creating_record(self):
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "clarify",
+                "record_type": "note",
+                "time": "",
+                "note": "",
+                "feed_kind": "",
+                "feed_amount": "",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "請問睡覺是從幾點到幾點？",
+            }
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "寶寶睡了"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "clarify")
+        self.assertEqual(CareRecord.objects.count(), 0)
+        self.assertEqual(replies, [("reply-token", "請問睡覺是從幾點到幾點？")])
+
+    def test_replies_when_openai_is_not_configured(self):
+        replies = []
+
+        def parser(message):
+            raise OpenAIConfigurationError("missing key")
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "configuration_error")
+        self.assertEqual(CareRecord.objects.count(), 0)
+        self.assertIn("OPENAI_API_KEY", replies[0][1])
 
 # Create your tests here.

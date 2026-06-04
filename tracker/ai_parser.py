@@ -81,7 +81,8 @@ PARSER_INSTRUCTIONS = """
 - record_type 只能是 feeding、sleep、diaper、health、growth、note。
 - time 用 YYYY-MM-DDTHH:MM；若使用者說「剛剛」或沒有明確時間，用目前台北時間。
 - 沒有的文字欄位給空字串；沒有的數字欄位給 null；沒有提到尿/便就給 false。
-- feed_amount 保留單位，例如 90ml；weight 保留 kg；height 保留 cm。
+- feed_amount 保留單位，例如 90ml。
+- temperature、weight、height 只放數字字串，不要放單位。
 """.strip()
 
 
