@@ -1,7 +1,11 @@
+import base64
+import hashlib
+import hmac
 import json
 from decimal import Decimal, InvalidOperation
 from datetime import date
 
+from django.conf import settings
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -59,6 +63,19 @@ def read_json(request):
         return json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError:
         return None
+
+
+def is_valid_line_signature(body, signature, channel_secret):
+    if not signature or not channel_secret:
+        return False
+
+    digest = hmac.new(
+        channel_secret.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).digest()
+    expected_signature = base64.b64encode(digest).decode("utf-8")
+    return hmac.compare_digest(expected_signature, signature)
 
 
 @require_http_methods(["GET"])
@@ -126,6 +143,19 @@ def api_record_detail(request, record_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def line_webhook(request):
+    if not settings.LINE_CHANNEL_SECRET:
+        return JsonResponse(
+            {"error": "LINE_CHANNEL_SECRET is not configured"},
+            status=503,
+        )
+
+    if not is_valid_line_signature(
+        request.body,
+        request.headers.get("X-Line-Signature", ""),
+        settings.LINE_CHANNEL_SECRET,
+    ):
+        return JsonResponse({"error": "Invalid LINE signature"}, status=403)
+
     data = read_json(request)
     if data is None:
         return HttpResponseBadRequest("Invalid JSON")
