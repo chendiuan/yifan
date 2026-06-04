@@ -8,6 +8,7 @@ from django.test import Client, TestCase, override_settings
 from .ai_parser import (
     CareRecordParseError,
     OpenAIConfigurationError,
+    OpenAIRequestError,
     parse_care_record_message,
 )
 from .models import CareRecord
@@ -274,5 +275,27 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(status, "configuration_error")
         self.assertEqual(CareRecord.objects.count(), 0)
         self.assertIn("OPENAI_API_KEY", replies[0][1])
+
+    def test_replies_when_openai_request_fails(self):
+        replies = []
+
+        def parser(message):
+            raise OpenAIRequestError("quota exceeded")
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "ai_error")
+        self.assertEqual(CareRecord.objects.count(), 0)
+        self.assertIn("OpenAI", replies[0][1])
 
 # Create your tests here.

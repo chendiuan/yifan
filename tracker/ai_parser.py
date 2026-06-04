@@ -10,6 +10,10 @@ class OpenAIConfigurationError(Exception):
     pass
 
 
+class OpenAIRequestError(Exception):
+    pass
+
+
 class CareRecordParseError(Exception):
     pass
 
@@ -96,19 +100,23 @@ def parse_care_record_message(message, client=None):
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
-    response = client.responses.create(
-        model=settings.OPENAI_MODEL,
-        instructions=PARSER_INSTRUCTIONS,
-        input=f"目前台北時間：{now}\n使用者訊息：{message}",
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "care_record_parse",
-                "schema": CARE_RECORD_SCHEMA,
-                "strict": True,
+    try:
+        response = client.responses.create(
+            model=settings.OPENAI_MODEL,
+            instructions=PARSER_INSTRUCTIONS,
+            input=f"目前台北時間：{now}\n使用者訊息：{message}",
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "care_record_parse",
+                    "schema": CARE_RECORD_SCHEMA,
+                    "strict": True,
+                },
             },
-        },
-    )
+        )
+    except Exception as exc:
+        raise OpenAIRequestError("OpenAI request failed") from exc
+
     return normalize_parse_result(response.output_text)
 
 

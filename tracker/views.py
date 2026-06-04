@@ -15,6 +15,7 @@ from django.views.decorators.http import require_http_methods
 from .ai_parser import (
     CareRecordParseError,
     OpenAIConfigurationError,
+    OpenAIRequestError,
     parse_care_record_message,
 )
 from .line_client import LineConfigurationError, LineReplyError, reply_to_line
@@ -213,6 +214,9 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
     except OpenAIConfigurationError:
         safe_reply_to_line(reply_token, "AI 尚未設定完成，請先設定 OPENAI_API_KEY。", replier)
         return "configuration_error"
+    except OpenAIRequestError:
+        safe_reply_to_line(reply_token, "AI 目前無法使用，請檢查 OpenAI 額度或付款設定。", replier)
+        return "ai_error"
     except CareRecordParseError:
         safe_reply_to_line(reply_token, "我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。", replier)
         return "parse_error"
