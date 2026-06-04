@@ -5,6 +5,7 @@ import json
 
 from django.test import Client, TestCase, override_settings
 
+from .ai_parser import CareRecordParseError, parse_care_record_message
 from .models import CareRecord
 
 
@@ -15,6 +16,26 @@ def line_signature(body, channel_secret):
         hashlib.sha256,
     ).digest()
     return base64.b64encode(digest).decode("utf-8")
+
+
+class FakeOpenAIResponse:
+    def __init__(self, output_text):
+        self.output_text = output_text
+
+
+class FakeResponses:
+    def __init__(self, output_text):
+        self.output_text = output_text
+        self.last_kwargs = None
+
+    def create(self, **kwargs):
+        self.last_kwargs = kwargs
+        return FakeOpenAIResponse(self.output_text)
+
+
+class FakeOpenAIClient:
+    def __init__(self, output_text):
+        self.responses = FakeResponses(output_text)
 
 
 class TrackerApiTests(TestCase):
@@ -99,5 +120,47 @@ class LineWebhookTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+
+class CareRecordParserTests(TestCase):
+    @override_settings(OPENAI_MODEL="gpt-5-mini")
+    def test_parse_care_record_message_uses_structured_responses_api(self):
+        output = json.dumps({
+            "action": "create_record",
+            "record_type": "feeding",
+            "time": "2026-06-04T09:15",
+            "note": "",
+            "feed_kind": "奶瓶",
+            "feed_amount": "90ml",
+            "sleep_minutes": None,
+            "pee": False,
+            "poop": False,
+            "poop_amount": "",
+            "poop_color": "",
+            "temperature": "",
+            "symptom": "",
+            "weight": "",
+            "height": "",
+            "clarification": "",
+        })
+        client = FakeOpenAIClient(output)
+
+        result = parse_care_record_message("剛剛喝奶 90ml", client=client)
+
+        self.assertEqual(result["action"], "create_record")
+        self.assertEqual(result["record_type"], "feeding")
+        self.assertEqual(result["feed_amount"], "90ml")
+        self.assertEqual(client.responses.last_kwargs["model"], "gpt-5-mini")
+        self.assertEqual(
+            client.responses.last_kwargs["text"]["format"]["type"],
+            "json_schema",
+        )
+        self.assertTrue(client.responses.last_kwargs["text"]["format"]["strict"])
+
+    def test_parse_care_record_message_rejects_invalid_json(self):
+        client = FakeOpenAIClient("not json")
+
+        with self.assertRaises(CareRecordParseError):
+            parse_care_record_message("剛剛喝奶 90ml", client=client)
 
 # Create your tests here.
