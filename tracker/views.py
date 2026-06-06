@@ -2,10 +2,12 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 from decimal import Decimal, InvalidOperation
 from datetime import date
 
 from django.conf import settings
+from django.db import transaction
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -147,9 +149,9 @@ def api_record_detail(request, record_id):
     return JsonResponse({"deleted": record_id})
 
 
-def create_record_from_parse_result(result):
+def create_record_from_parse_result(result, baby=None):
     return CareRecord.objects.create(
-        baby=get_baby(),
+        baby=baby or get_baby(),
         record_type=result["record_type"],
         time=parse_datetime(result.get("time")),
         note=str(result.get("note", "")).strip(),
@@ -162,9 +164,32 @@ def create_record_from_parse_result(result):
         poop_color=str(result.get("poop_color", "")).strip(),
         temperature=parse_decimal(result.get("temperature")),
         symptom=str(result.get("symptom", "")).strip(),
-        weight=parse_decimal(result.get("weight")),
+        weight=parse_weight(result.get("weight")),
         height=parse_decimal(result.get("height")),
     )
+
+
+def replace_latest_record_from_parse_result(result):
+    baby = get_baby()
+
+    with transaction.atomic():
+        previous = (
+            CareRecord.objects.select_for_update()
+            .filter(baby=baby, record_type=result["record_type"])
+            .order_by("-time", "-created_at")
+            .first()
+        )
+        if previous is None:
+            return None
+
+        previous.delete()
+        return create_record_from_parse_result(result, baby=baby)
+
+
+def format_weight(weight):
+    kilograms = Decimal(weight).quantize(Decimal("0.001"))
+    grams = int(kilograms * 1000)
+    return f"{kilograms:.3f}kg（{grams}g）"
 
 
 def format_created_reply(record):
@@ -184,7 +209,7 @@ def format_created_reply(record):
     if record.temperature is not None:
         parts.append(f"{record.temperature}°C")
     if record.weight is not None:
-        parts.append(f"{record.weight}kg")
+        parts.append(format_weight(record.weight))
     if record.height is not None:
         parts.append(f"{record.height}cm")
 
@@ -229,6 +254,18 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
     if result["action"] == "ignore":
         safe_reply_to_line(reply_token, "我目前只會幫忙記錄寶寶照護喔。", replier)
         return "ignored"
+
+    if result["action"] == "correct_record":
+        record = replace_latest_record_from_parse_result(result)
+        if record is None:
+            safe_reply_to_line(reply_token, "找不到可更正的同類紀錄。", replier)
+            return "correction_not_found"
+        safe_reply_to_line(
+            reply_token,
+            format_created_reply(record).replace("已記錄：", "已更正：", 1),
+            replier,
+        )
+        return "corrected"
 
     record = create_record_from_parse_result(result)
     safe_reply_to_line(reply_token, format_created_reply(record), replier)
@@ -288,5 +325,26 @@ def parse_decimal(value):
         return Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+
+
+def parse_weight(value):
+    if value in (None, ""):
+        return None
+
+    text = str(value).strip().lower().replace(",", "")
+    match = re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", text)
+    if not match:
+        return None
+
+    try:
+        weight = Decimal(match.group(0))
+    except InvalidOperation:
+        return None
+
+    if text.endswith("g") and not text.endswith("kg"):
+        return weight / Decimal("1000")
+    if weight > 100:
+        return weight / Decimal("1000")
+    return weight
 
 # Create your views here.

@@ -251,7 +251,10 @@ function describeRecord(record) {
     return [record.temperature && `${record.temperature} °C`, record.symptom].filter(Boolean).join(" · ") || "健康紀錄";
   }
   if (record.type === "growth") {
-    return [record.weight && `${record.weight} kg`, record.height && `${record.height} cm`].filter(Boolean).join(" · ") || "成長紀錄";
+    return [
+      record.weight && formatWeight(record.weight),
+      record.height && `${record.height} cm`,
+    ].filter(Boolean).join(" · ") || "成長紀錄";
   }
   return "一般備註";
 }
@@ -395,6 +398,12 @@ function calculateFeedGap(feedings) {
 
 function formatMinutes(minutes) {
   return `${Math.floor(minutes / 60)} 小時 ${minutes % 60} 分`;
+}
+
+function formatWeight(value) {
+  const kilograms = Number(value);
+  if (!Number.isFinite(kilograms)) return `${value} kg`;
+  return `${kilograms.toFixed(3)} kg（${Math.round(kilograms * 1000)} g）`;
 }
 
 function renderProfile() {

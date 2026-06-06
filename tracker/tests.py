@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import importlib
 import json
-from decimal import InvalidOperation
+from decimal import Decimal, InvalidOperation
 
 from django.db import connection
 from django.test import Client, TestCase, TransactionTestCase, override_settings
@@ -16,7 +16,7 @@ from .ai_parser import (
     parse_care_record_message,
 )
 from .models import Baby, CareRecord
-from .views import handle_line_text_event
+from .views import handle_line_text_event, parse_weight
 
 
 def line_signature(body, channel_secret):
@@ -302,6 +302,65 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(CareRecord.objects.count(), 0)
         self.assertIn("OpenAI", replies[0][1])
 
+    def test_correction_replaces_latest_record_of_same_type(self):
+        baby = Baby.objects.create(
+            id=1,
+            name="Test Baby",
+            birth_date="2026-05-18",
+        )
+        previous = CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.GROWTH,
+            time=timezone.now(),
+            weight="3.069",
+        )
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "correct_record",
+                "record_type": "growth",
+                "time": "2026-06-06T08:40",
+                "note": "",
+                "feed_kind": "",
+                "feed_amount": "",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "3060",
+                "height": "",
+                "clarification": "",
+            }
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "更正3060g"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "corrected")
+        self.assertEqual(CareRecord.objects.count(), 1)
+        self.assertFalse(CareRecord.objects.filter(id=previous.id).exists())
+        corrected = CareRecord.objects.get()
+        self.assertEqual(str(corrected.weight), "3.060")
+        self.assertIn("已更正", replies[0][1])
+        self.assertIn("3060g", replies[0][1])
+
+    def test_weight_parser_converts_grams_to_kilograms(self):
+        self.assertEqual(parse_weight("3069g"), Decimal("3.069"))
+        self.assertEqual(parse_weight("3060"), Decimal("3.06"))
+        self.assertEqual(parse_weight("3.2kg"), Decimal("3.2"))
+
 
 class DecimalDataRepairTests(TransactionTestCase):
     def test_repairs_decimal_values_that_include_units(self):
@@ -336,6 +395,6 @@ class DecimalDataRepairTests(TransactionTestCase):
         )
 
         repaired = CareRecord.objects.get(id=record.id)
-        self.assertEqual(str(repaired.weight), "4.20")
+        self.assertEqual(str(repaired.weight), "4.200")
 
 # Create your tests here.

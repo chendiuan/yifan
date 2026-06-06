@@ -24,7 +24,7 @@ CARE_RECORD_SCHEMA = {
     "properties": {
         "action": {
             "type": "string",
-            "enum": ["create_record", "clarify", "ignore"],
+            "enum": ["create_record", "correct_record", "clarify", "ignore"],
         },
         "record_type": {
             "type": "string",
@@ -78,8 +78,10 @@ PARSER_INSTRUCTIONS = """
 
 規則：
 - 只從使用者文字推論，不要編造數值。
-- action 用 create_record、clarify 或 ignore。
+- action 用 create_record、correct_record、clarify 或 ignore。
 - 可以建立紀錄時，action=create_record。
+- 使用者明確說「更正」、「改成」、「應該是」時，action=correct_record。
+- 更正時仍需根據內容填入 record_type 與完整的新數值，例如「更正3060g」是 growth。
 - 資訊不足但看起來想記錄寶寶照護時，action=clarify，clarification 放一個簡短追問。
 - 與寶寶照護無關時，action=ignore。
 - record_type 只能是 feeding、sleep、diaper、health、growth、note。
@@ -87,6 +89,7 @@ PARSER_INSTRUCTIONS = """
 - 沒有的文字欄位給空字串；沒有的數字欄位給 null；沒有提到尿/便就給 false。
 - feed_amount 保留單位，例如 90ml。
 - temperature、weight、height 只放數字字串，不要放單位。
+- weight 一律換算成公斤；例如 3069g 輸出 3.069，4.2kg 輸出 4.2。
 """.strip()
 
 
@@ -130,7 +133,12 @@ def normalize_parse_result(output_text):
     if not isinstance(data, dict) or not required_keys.issubset(data):
         raise CareRecordParseError("OpenAI response did not match the parser schema")
 
-    if data["action"] not in {"create_record", "clarify", "ignore"}:
+    if data["action"] not in {
+        "create_record",
+        "correct_record",
+        "clarify",
+        "ignore",
+    }:
         raise CareRecordParseError("OpenAI returned an unsupported action")
 
     valid_record_types = {
