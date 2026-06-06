@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>新生兒照護紀錄</title>
-    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=latest-weight-1" />
+    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=growth-chart-1" />
   </head>
   <body>
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -263,6 +263,34 @@
             </div>
           </section>
 
+          <section class="growth-chart-panel" aria-label="身高體重成長曲線">
+            <div class="section-heading growth-chart-heading">
+              <div>
+                <p class="eyebrow">Growth Trend</p>
+                <h2>身高體重成長曲線</h2>
+              </div>
+              <div class="growth-metric-switch" role="tablist" aria-label="成長曲線項目">
+                <button class="growth-metric-button is-active" data-growth-metric="weight" type="button" role="tab" aria-selected="true">體重</button>
+                <button class="growth-metric-button" data-growth-metric="height" type="button" role="tab" aria-selected="false">身高</button>
+              </div>
+            </div>
+            <div class="growth-stats" aria-label="成長統計">
+              <div>
+                <span>最新數值</span>
+                <strong id="growthLatestValue">尚無資料</strong>
+              </div>
+              <div>
+                <span>較前次變化</span>
+                <strong id="growthChange">尚無資料</strong>
+              </div>
+              <div>
+                <span>紀錄筆數</span>
+                <strong id="growthRecordCount">0 筆</strong>
+              </div>
+            </div>
+            <div id="growthChart" class="growth-chart"></div>
+          </section>
+
           <section class="timeline-panel" aria-label="紀錄時間軸">
             <div class="section-heading">
               <div>
@@ -308,6 +336,6 @@
       </section>
     </main>
 
-    <script src="{% static 'tracker/app.js' %}?v=latest-weight-1"></script>
+    <script src="{% static 'tracker/app.js' %}?v=growth-chart-1"></script>
   </body>
 </html>

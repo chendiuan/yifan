@@ -30,6 +30,7 @@ const columnIcons = {
 
 const state = {
   activeType: "feeding",
+  growthMetric: "weight",
   records: [],
   profile: { ...defaultProfile },
   selectedDate: localDateKey(),
@@ -55,6 +56,10 @@ const els = {
   poopCount: document.querySelector("#poopCount"),
   lastRecord: document.querySelector("#lastRecord"),
   latestWeight: document.querySelector("#latestWeight"),
+  growthChart: document.querySelector("#growthChart"),
+  growthLatestValue: document.querySelector("#growthLatestValue"),
+  growthChange: document.querySelector("#growthChange"),
+  growthRecordCount: document.querySelector("#growthRecordCount"),
   feedGap: document.querySelector("#feedGap"),
   longestSleep: document.querySelector("#longestSleep"),
   latestTemp: document.querySelector("#latestTemp"),
@@ -380,6 +385,145 @@ function renderSummary() {
   els.feedGap.textContent = calculateFeedGap(feedings);
 }
 
+function renderGrowthChart() {
+  const metric = state.growthMetric;
+  const unit = metric === "weight" ? "kg" : "cm";
+  const records = state.records
+    .filter((record) => record.type === "growth" && record[metric])
+    .map((record) => ({
+      time: record.time,
+      value: Number(record[metric]),
+    }))
+    .filter((record) => Number.isFinite(record.value))
+    .sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  document.querySelectorAll(".growth-metric-button").forEach((button) => {
+    const isActive = button.dataset.growthMetric === metric;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+
+  els.growthRecordCount.textContent = `${records.length} 筆`;
+
+  if (!records.length) {
+    els.growthLatestValue.textContent = "尚無資料";
+    els.growthChange.textContent = "尚無資料";
+    els.growthChart.innerHTML = `
+      <div class="growth-chart-empty">
+        尚未有${metric === "weight" ? "體重" : "身高"}紀錄
+      </div>
+    `;
+    return;
+  }
+
+  const latest = records.at(-1);
+  els.growthLatestValue.textContent = formatGrowthValue(latest.value, metric);
+
+  if (records.length > 1) {
+    const previous = records.at(-2);
+    const change = latest.value - previous.value;
+    const sign = change > 0 ? "+" : "";
+    const decimals = metric === "weight" ? 3 : 1;
+    els.growthChange.textContent = `${sign}${change.toFixed(decimals)} ${unit}`;
+    els.growthChange.classList.toggle("is-positive", change > 0);
+    els.growthChange.classList.toggle("is-negative", change < 0);
+  } else {
+    els.growthChange.textContent = "需要至少 2 筆";
+    els.growthChange.classList.remove("is-positive", "is-negative");
+  }
+
+  els.growthChart.innerHTML = buildGrowthChartSvg(records, metric);
+}
+
+function formatGrowthValue(value, metric) {
+  if (metric === "weight") return formatWeight(value);
+  return `${Number(value).toFixed(1)} cm`;
+}
+
+function buildGrowthChartSvg(records, metric) {
+  const width = 900;
+  const height = 320;
+  const margin = { top: 28, right: 28, bottom: 58, left: 68 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const values = records.map((record) => record.value);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const minimumRange = metric === "weight" ? 0.2 : 2;
+  const range = Math.max(rawMax - rawMin, minimumRange);
+  const padding = range * 0.18;
+  const yMin = Math.max(0, rawMin - padding);
+  const yMax = rawMax + padding;
+  const yRange = yMax - yMin || 1;
+  const color = metric === "weight" ? "#d96d8a" : "#5da99a";
+  const fill = metric === "weight" ? "rgba(255, 140, 168, 0.14)" : "rgba(93, 169, 154, 0.14)";
+  const decimals = metric === "weight" ? 2 : 1;
+  const unit = metric === "weight" ? "kg" : "cm";
+
+  const points = records.map((record, index) => {
+    const x = records.length === 1
+      ? margin.left + plotWidth / 2
+      : margin.left + (index / (records.length - 1)) * plotWidth;
+    const y = margin.top + ((yMax - record.value) / yRange) * plotHeight;
+    return { ...record, x, y };
+  });
+
+  const gridLines = Array.from({ length: 5 }, (_, index) => {
+    const ratio = index / 4;
+    const y = margin.top + ratio * plotHeight;
+    const value = yMax - ratio * yRange;
+    return `
+      <line class="growth-grid-line" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line>
+      <text class="growth-axis-label" x="${margin.left - 12}" y="${y + 4}" text-anchor="end">${value.toFixed(decimals)}</text>
+    `;
+  }).join("");
+
+  const labelIndexes = chartLabelIndexes(records.length, 6);
+  const dateLabels = labelIndexes.map((index) => {
+    const point = points[index];
+    return `
+      <text class="growth-date-label" x="${point.x}" y="${height - 22}" text-anchor="middle">${formatChartDate(point.time)}</text>
+    `;
+  }).join("");
+
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPath = points.length > 1
+    ? `M ${points[0].x} ${margin.top + plotHeight} L ${linePoints.replaceAll(",", " ")} L ${points.at(-1).x} ${margin.top + plotHeight} Z`
+    : "";
+  const circles = points.map((point) => `
+    <circle class="growth-point" cx="${point.x}" cy="${point.y}" r="5" style="--point-color:${color}">
+      <title>${formatChartDate(point.time)} ${formatGrowthValue(point.value, metric)}</title>
+    </circle>
+  `).join("");
+
+  return `
+    <svg class="growth-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${metric === "weight" ? "體重" : "身高"}成長曲線，共 ${records.length} 筆紀錄">
+      <text class="growth-unit-label" x="${margin.left}" y="16">${unit}</text>
+      ${gridLines}
+      ${areaPath ? `<path class="growth-area" d="${areaPath}" fill="${fill}"></path>` : ""}
+      ${points.length > 1 ? `<polyline class="growth-line" points="${linePoints}" style="--line-color:${color}"></polyline>` : ""}
+      ${circles}
+      ${dateLabels}
+    </svg>
+  `;
+}
+
+function chartLabelIndexes(length, maximumLabels) {
+  if (length <= maximumLabels) return Array.from({ length }, (_, index) => index);
+  const indexes = new Set([0, length - 1]);
+  for (let index = 1; index < maximumLabels - 1; index += 1) {
+    indexes.add(Math.round((index / (maximumLabels - 1)) * (length - 1)));
+  }
+  return [...indexes].sort((a, b) => a - b);
+}
+
+function formatChartDate(iso) {
+  return new Intl.DateTimeFormat("zh-Hant", {
+    month: "numeric",
+    day: "numeric",
+  }).format(new Date(iso));
+}
+
 function hasPee(record) {
   return record.pee === true || record.diaperKind === "尿尿" || record.diaperKind === "尿尿 + 便便";
 }
@@ -430,6 +574,7 @@ function renderAll() {
   renderDateNavigation();
   renderProfile();
   renderSummary();
+  renderGrowthChart();
   renderDayTable();
   renderRecords();
 }
@@ -467,6 +612,13 @@ async function loadData() {
 
 document.querySelectorAll(".type-tab").forEach((button) => {
   button.addEventListener("click", () => setActiveType(button.dataset.type));
+});
+
+document.querySelectorAll(".growth-metric-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.growthMetric = button.dataset.growthMetric;
+    renderGrowthChart();
+  });
 });
 
 els.recordForm.addEventListener("submit", async (event) => {
