@@ -38,6 +38,12 @@
         <path d="M6 3h9l3 3v15H6V3Z" />
         <path d="M14 3v4h4M9 11h6M9 15h6" />
       </symbol>
+      <symbol id="icon-chevron-left" viewBox="0 0 24 24">
+        <path d="m15 18-6-6 6-6" />
+      </symbol>
+      <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
     </svg>
     <main class="app-shell">
       <aside class="sidebar" aria-label="寶寶概要">
@@ -106,12 +112,27 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">今日照護</p>
-            <h2>快速記錄</h2>
+            <p class="eyebrow" id="viewDateEyebrow">今日照護</p>
+            <h2 id="viewDateHeading">快速記錄</h2>
           </div>
-          <div class="topbar-actions">
-            <button class="ghost-button" id="exportButton" type="button" title="匯出 JSON">匯出</button>
-            <button class="ghost-button danger" id="clearButton" type="button" title="清除所有本機紀錄">清除</button>
+          <div class="topbar-tools">
+            <div class="date-navigator" aria-label="瀏覽紀錄日期">
+              <button class="date-step-button" id="previousDateButton" type="button" title="前一天" aria-label="前一天">
+                <svg class="mini-icon"><use href="#icon-chevron-left"></use></svg>
+              </button>
+              <label class="date-picker-label">
+                <span class="sr-only">選擇紀錄日期</span>
+                <input id="selectedDate" type="date" aria-label="選擇紀錄日期" />
+              </label>
+              <button class="date-step-button" id="nextDateButton" type="button" title="後一天" aria-label="後一天">
+                <svg class="mini-icon"><use href="#icon-chevron-right"></use></svg>
+              </button>
+              <button class="ghost-button today-button" id="todayButton" type="button">今天</button>
+            </div>
+            <div class="topbar-actions">
+              <button class="ghost-button" id="exportButton" type="button" title="匯出 JSON">匯出</button>
+              <button class="ghost-button danger" id="clearButton" type="button" title="清除所有本機紀錄">清除</button>
+            </div>
           </div>
         </header>
 
@@ -215,7 +236,7 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">24H Chart</p>
-                <h2>今日生理狀態表</h2>
+                <h2 id="dayTableTitle">今日生理狀態表</h2>
               </div>
               <span class="table-hint">橫向滑動可看全部欄位</span>
             </div>
@@ -242,7 +263,7 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Timeline</p>
-                <h2>照護時間軸</h2>
+                <h2 id="timelineTitle">今日照護時間軸</h2>
               </div>
               <select id="filterType" aria-label="篩選紀錄類型">
                 <option value="all">全部</option>
@@ -261,7 +282,7 @@
             <div class="section-heading compact">
               <div>
                 <p class="eyebrow">Insights</p>
-                <h2>今日觀察</h2>
+                <h2 id="insightsTitle">今日觀察</h2>
               </div>
             </div>
             <div class="insight-stack">

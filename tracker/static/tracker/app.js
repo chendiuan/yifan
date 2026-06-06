@@ -32,10 +32,20 @@ const state = {
   activeType: "feeding",
   records: [],
   profile: { ...defaultProfile },
+  selectedDate: localDateKey(),
 };
 
 const els = {
   todayLabel: document.querySelector("#todayLabel"),
+  viewDateEyebrow: document.querySelector("#viewDateEyebrow"),
+  viewDateHeading: document.querySelector("#viewDateHeading"),
+  selectedDate: document.querySelector("#selectedDate"),
+  previousDateButton: document.querySelector("#previousDateButton"),
+  nextDateButton: document.querySelector("#nextDateButton"),
+  todayButton: document.querySelector("#todayButton"),
+  dayTableTitle: document.querySelector("#dayTableTitle"),
+  timelineTitle: document.querySelector("#timelineTitle"),
+  insightsTitle: document.querySelector("#insightsTitle"),
   babyName: document.querySelector("#babyName"),
   birthDate: document.querySelector("#birthDate"),
   babyAge: document.querySelector("#babyAge"),
@@ -90,10 +100,21 @@ function toDatetimeLocal(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function isToday(iso) {
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function dateFromKey(dateKey) {
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function recordDateKey(iso) {
   const date = new Date(iso);
-  const now = new Date();
-  return date.toDateString() === now.toDateString();
+  return localDateKey(date);
+}
+
+function isSelectedDate(iso) {
+  return recordDateKey(iso) === state.selectedDate;
 }
 
 function formatTime(iso) {
@@ -112,6 +133,47 @@ function formatDateLong(date = new Date()) {
     day: "numeric",
     weekday: "long",
   }).format(date);
+}
+
+function formatDateShort(dateKey) {
+  return new Intl.DateTimeFormat("zh-Hant", {
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(dateFromKey(dateKey));
+}
+
+function selectedDateRecords() {
+  return state.records.filter((record) => isSelectedDate(record.time));
+}
+
+function setSelectedDate(dateKey) {
+  const today = localDateKey();
+  state.selectedDate = dateKey > today ? today : dateKey;
+  els.selectedDate.value = state.selectedDate;
+  renderAll();
+}
+
+function shiftSelectedDate(days) {
+  const date = dateFromKey(state.selectedDate);
+  date.setDate(date.getDate() + days);
+  setSelectedDate(localDateKey(date));
+}
+
+function renderDateNavigation() {
+  const today = localDateKey();
+  const isToday = state.selectedDate === today;
+  const dateLabel = formatDateShort(state.selectedDate);
+
+  els.selectedDate.value = state.selectedDate;
+  els.selectedDate.max = today;
+  els.nextDateButton.disabled = isToday;
+  els.todayButton.disabled = isToday;
+  els.viewDateEyebrow.textContent = isToday ? "今日照護" : "歷史紀錄";
+  els.viewDateHeading.textContent = isToday ? "快速記錄" : dateLabel;
+  els.dayTableTitle.textContent = isToday ? "今日生理狀態表" : `${dateLabel}生理狀態表`;
+  els.timelineTitle.textContent = isToday ? "今日照護時間軸" : `${dateLabel}照護時間軸`;
+  els.insightsTitle.textContent = isToday ? "今日觀察" : `${dateLabel}觀察`;
 }
 
 function calculateAge(birthDate) {
@@ -196,7 +258,7 @@ function describeRecord(record) {
 
 function renderRecords() {
   const filter = els.filterType.value;
-  const records = state.records
+  const records = selectedDateRecords()
     .filter((record) => filter === "all" || record.type === filter)
     .sort((a, b) => new Date(b.time) - new Date(a.time));
 
@@ -223,15 +285,14 @@ function renderRecords() {
 }
 
 function renderDayTable() {
-  const todayRecords = state.records
-    .filter((record) => isToday(record.time))
+  const dayRecords = selectedDateRecords()
     .sort((a, b) => new Date(a.time) - new Date(b.time));
 
   const columns = ["feeding", "sleep", "pee", "poop", "health", "growth", "note"];
   const rows = Array.from({ length: 24 }, (_, hour) => {
     const cells = columns
       .map((type) => {
-        const records = todayRecords.filter((record) => {
+        const records = dayRecords.filter((record) => {
           if (new Date(record.time).getHours() !== hour) return false;
           if (type === "pee") return record.type === "diaper" && hasPee(record);
           if (type === "poop") return record.type === "diaper" && hasPoop(record);
@@ -289,15 +350,15 @@ function iconSvg(name) {
 }
 
 function renderSummary() {
-  const todayRecords = state.records.filter((record) => isToday(record.time));
-  const feedings = todayRecords.filter((record) => record.type === "feeding");
-  const sleeps = todayRecords.filter((record) => record.type === "sleep");
-  const diapers = todayRecords.filter((record) => record.type === "diaper");
-  const health = state.records.filter((record) => record.type === "health" && record.temperature);
+  const dayRecords = selectedDateRecords();
+  const feedings = dayRecords.filter((record) => record.type === "feeding");
+  const sleeps = dayRecords.filter((record) => record.type === "sleep");
+  const diapers = dayRecords.filter((record) => record.type === "diaper");
+  const health = dayRecords.filter((record) => record.type === "health" && record.temperature);
 
   const sleepMinutes = sleeps.reduce((sum, record) => sum + Number(record.sleepMinutes || 0), 0);
   const longestSleep = sleeps.reduce((max, record) => Math.max(max, Number(record.sleepMinutes || 0)), 0);
-  const lastRecord = [...state.records].sort((a, b) => new Date(b.time) - new Date(a.time))[0];
+  const lastRecord = [...dayRecords].sort((a, b) => new Date(b.time) - new Date(a.time))[0];
 
   els.feedCount.textContent = `${feedings.length} 次`;
   els.sleepTotal.textContent = `${(sleepMinutes / 60).toFixed(1)} 小時`;
@@ -343,6 +404,7 @@ function renderProfile() {
 }
 
 function renderAll() {
+  renderDateNavigation();
   renderProfile();
   renderSummary();
   renderDayTable();
@@ -392,6 +454,7 @@ els.recordForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(buildRecord()),
     });
     state.records.push(data.record);
+    state.selectedDate = recordDateKey(data.record.time);
     resetForm();
     setActiveType(state.activeType);
     renderAll();
@@ -415,6 +478,12 @@ els.recordsList.addEventListener("click", async (event) => {
 });
 
 els.filterType.addEventListener("change", renderRecords);
+els.selectedDate.addEventListener("change", () => {
+  if (els.selectedDate.value) setSelectedDate(els.selectedDate.value);
+});
+els.previousDateButton.addEventListener("click", () => shiftSelectedDate(-1));
+els.nextDateButton.addEventListener("click", () => shiftSelectedDate(1));
+els.todayButton.addEventListener("click", () => setSelectedDate(localDateKey()));
 els.babyName.addEventListener("change", saveProfile);
 els.birthDate.addEventListener("change", saveProfile);
 els.pee.addEventListener("change", syncDiaperChoices);
@@ -461,6 +530,7 @@ function syncDiaperChoices() {
 }
 
 els.todayLabel.textContent = formatDateLong();
+els.selectedDate.value = state.selectedDate;
 els.recordTime.value = toDatetimeLocal();
 setActiveType(state.activeType);
 syncDiaperChoices();
