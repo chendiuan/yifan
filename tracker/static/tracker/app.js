@@ -28,9 +28,17 @@ const columnIcons = {
   note: "note",
 };
 
+const workspaceViewLabels = {
+  "quick-entry": "快速記錄",
+  "daily-chart": "24 小時紀錄",
+  "growth-trend": "成長曲線",
+  "care-timeline": "照護時間軸",
+};
+
 const state = {
   activeType: "feeding",
   growthMetric: "weight",
+  workspaceView: "quick-entry",
   records: [],
   profile: { ...defaultProfile },
   selectedDate: localDateKey(),
@@ -176,10 +184,29 @@ function renderDateNavigation() {
   els.nextDateButton.disabled = isToday;
   els.todayButton.disabled = isToday;
   els.viewDateEyebrow.textContent = isToday ? "今日照護" : "歷史紀錄";
-  els.viewDateHeading.textContent = isToday ? "快速記錄" : dateLabel;
+  els.viewDateHeading.textContent = isToday
+    ? workspaceViewLabels[state.workspaceView]
+    : `${dateLabel} · ${workspaceViewLabels[state.workspaceView]}`;
   els.dayTableTitle.textContent = isToday ? "今日生理狀態表" : `${dateLabel}生理狀態表`;
   els.timelineTitle.textContent = isToday ? "今日照護時間軸" : `${dateLabel}照護時間軸`;
   els.insightsTitle.textContent = isToday ? "今日觀察" : `${dateLabel}觀察`;
+}
+
+function setWorkspaceView(view) {
+  if (!workspaceViewLabels[view]) return;
+  state.workspaceView = view;
+
+  document.querySelectorAll("[data-workspace-view]").forEach((panel) => {
+    panel.hidden = panel.dataset.workspaceView !== view;
+  });
+
+  document.querySelectorAll("[data-workspace-target]").forEach((button) => {
+    const isActive = button.dataset.workspaceTarget === view;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+
+  renderDateNavigation();
 }
 
 function calculateAge(birthDate) {
@@ -614,6 +641,10 @@ document.querySelectorAll(".type-tab").forEach((button) => {
   button.addEventListener("click", () => setActiveType(button.dataset.type));
 });
 
+document.querySelectorAll("[data-workspace-target]").forEach((button) => {
+  button.addEventListener("click", () => setWorkspaceView(button.dataset.workspaceTarget));
+});
+
 document.querySelectorAll(".growth-metric-button").forEach((button) => {
   button.addEventListener("click", () => {
     state.growthMetric = button.dataset.growthMetric;
@@ -708,6 +739,7 @@ els.todayLabel.textContent = formatDateLong();
 els.selectedDate.value = state.selectedDate;
 els.recordTime.value = toDatetimeLocal();
 setActiveType(state.activeType);
+setWorkspaceView(state.workspaceView);
 syncDiaperChoices();
 syncPoopFields();
 loadData().catch((error) => {

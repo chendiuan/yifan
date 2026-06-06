@@ -262,21 +262,29 @@ h2 {
   display: none;
 }
 
-.section-nav a {
+.section-tab {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0;
   color: var(--muted);
+  background: transparent;
+  border: 0;
   border-bottom: 2px solid transparent;
   font-size: 0.88rem;
   font-weight: 750;
-  text-decoration: none;
 }
 
-.section-nav a:hover,
-.section-nav a:focus-visible {
+.section-tab:hover,
+.section-tab:focus-visible,
+.section-tab.is-active {
   color: var(--coral);
   border-bottom-color: var(--coral);
+}
+
+.workspace-view[hidden] {
+  display: none !important;
 }
 
 .app-shell {
@@ -1078,9 +1086,14 @@ textarea {
 
   .sidebar {
     position: static;
+    grid-row: 2;
     grid-template-columns: minmax(230px, 0.7fr) minmax(0, 1fr);
     max-height: none;
     overflow: visible;
+  }
+
+  .workspace {
+    grid-row: 1;
   }
 
   .baby-card {

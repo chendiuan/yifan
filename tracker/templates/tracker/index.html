@@ -94,11 +94,11 @@
         </div>
       </div>
 
-      <nav class="section-nav" aria-label="頁面區段">
-        <a href="#quick-entry">快速記錄</a>
-        <a href="#daily-chart">24 小時紀錄</a>
-        <a href="#growth-trend">成長曲線</a>
-        <a href="#care-timeline">照護時間軸</a>
+      <nav class="section-nav" aria-label="頁面區段" role="tablist">
+        <button class="section-tab is-active" data-workspace-target="quick-entry" type="button" role="tab" aria-selected="true">快速記錄</button>
+        <button class="section-tab" data-workspace-target="daily-chart" type="button" role="tab" aria-selected="false">24 小時紀錄</button>
+        <button class="section-tab" data-workspace-target="growth-trend" type="button" role="tab" aria-selected="false">成長曲線</button>
+        <button class="section-tab" data-workspace-target="care-timeline" type="button" role="tab" aria-selected="false">照護時間軸</button>
       </nav>
     </header>
 
@@ -173,7 +173,7 @@
       </aside>
 
       <section class="workspace">
-        <section class="entry-panel" id="quick-entry" aria-label="新增紀錄">
+        <section class="entry-panel workspace-view" id="quick-entry" data-workspace-view="quick-entry" aria-label="新增紀錄">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Quick Entry</p>
@@ -270,7 +270,7 @@
           </form>
         </section>
 
-        <section class="day-table-panel" id="daily-chart" aria-label="24 小時生理狀態表格">
+        <section class="day-table-panel workspace-view" id="daily-chart" data-workspace-view="daily-chart" aria-label="24 小時生理狀態表格" hidden>
           <div class="section-heading">
             <div>
               <p class="eyebrow">24H Chart</p>
@@ -297,7 +297,7 @@
           </div>
         </section>
 
-        <section class="growth-chart-panel" id="growth-trend" aria-label="身高體重成長曲線">
+        <section class="growth-chart-panel workspace-view" id="growth-trend" data-workspace-view="growth-trend" aria-label="身高體重成長曲線" hidden>
           <div class="section-heading growth-chart-heading">
             <div>
               <p class="eyebrow">Growth Trend</p>
@@ -316,7 +316,7 @@
           <div id="growthChart" class="growth-chart"></div>
         </section>
 
-        <section class="lower-grid" id="care-timeline">
+        <section class="lower-grid workspace-view" id="care-timeline" data-workspace-view="care-timeline" hidden>
           <section class="timeline-panel" aria-label="紀錄時間軸">
             <div class="section-heading">
               <div>
