@@ -226,6 +226,25 @@ def safe_reply_to_line(reply_token, text, replier=reply_to_line):
         return False
 
 
+def enrich_parse_result_from_message(result, message):
+    enriched = dict(result)
+    normalized_message = str(message).strip().lower().replace(",", "")
+
+    if any(keyword in normalized_message for keyword in ("更正", "改成", "應該是")):
+        enriched["action"] = "correct_record"
+
+    weight_match = re.search(
+        r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(kg|公斤|g|公克|克)\b",
+        normalized_message,
+    )
+    if weight_match:
+        amount, unit = weight_match.groups()
+        enriched["record_type"] = CareRecord.GROWTH
+        enriched["weight"] = f"{amount}{unit}"
+
+    return enriched
+
+
 def handle_line_text_event(event, parser=parse_care_record_message, replier=reply_to_line):
     message = event.get("message", {})
     if event.get("type") != "message" or message.get("type") != "text":
@@ -245,6 +264,17 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
     except CareRecordParseError:
         safe_reply_to_line(reply_token, "我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。", replier)
         return "parse_error"
+
+    result = enrich_parse_result_from_message(result, text)
+
+    if (
+        result["action"] in {"create_record", "correct_record"}
+        and result["record_type"] == CareRecord.GROWTH
+        and not result.get("weight")
+        and not result.get("height")
+    ):
+        safe_reply_to_line(reply_token, "請提供體重或身高，例如：寶寶今天體重3060g。", replier)
+        return "clarify"
 
     if result["action"] == "clarify":
         question = result.get("clarification") or "你想記錄哪一項寶寶照護呢？"

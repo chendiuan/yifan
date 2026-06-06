@@ -5,6 +5,7 @@ import importlib
 import json
 from decimal import Decimal, InvalidOperation
 
+from django.apps import apps as django_apps
 from django.db import connection
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
@@ -361,6 +362,85 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(parse_weight("3060"), Decimal("3.06"))
         self.assertEqual(parse_weight("3.2kg"), Decimal("3.2"))
 
+    def test_message_weight_is_used_when_ai_result_omits_weight(self):
+        baby = Baby.objects.create(
+            id=1,
+            name="Test Baby",
+            birth_date="2026-05-18",
+        )
+
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "growth",
+                "time": "2026-06-06T08:39",
+                "note": "",
+                "feed_kind": "",
+                "feed_amount": "",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "寶寶今天體重3069g"},
+        }
+
+        status = handle_line_text_event(
+            event,
+            parser=parser,
+            replier=lambda reply_token, text: True,
+        )
+
+        self.assertEqual(status, "created")
+        self.assertEqual(str(CareRecord.objects.get(baby=baby).weight), "3.069")
+
+    def test_empty_growth_result_requests_clarification(self):
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "growth",
+                "time": "2026-06-06T08:39",
+                "note": "",
+                "feed_kind": "",
+                "feed_amount": "",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "記錄寶寶成長"},
+            },
+            parser=parser,
+            replier=lambda reply_token, text: replies.append(text) or True,
+        )
+
+        self.assertEqual(status, "clarify")
+        self.assertEqual(CareRecord.objects.count(), 0)
+        self.assertIn("體重或身高", replies[0])
+
 
 class DecimalDataRepairTests(TransactionTestCase):
     def test_repairs_decimal_values_that_include_units(self):
@@ -396,5 +476,29 @@ class DecimalDataRepairTests(TransactionTestCase):
 
         repaired = CareRecord.objects.get(id=record.id)
         self.assertEqual(str(repaired.weight), "4.200")
+
+    def test_removes_growth_records_without_measurements(self):
+        baby = Baby.objects.create(name="Test Baby", birth_date="2026-05-18")
+        empty_record = CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.GROWTH,
+            time=timezone.now(),
+        )
+        valid_record = CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.GROWTH,
+            time=timezone.now(),
+            weight="3.060",
+        )
+        cleanup_migration = importlib.import_module(
+            "tracker.migrations.0004_remove_empty_growth_records"
+        )
+        cleanup_migration.remove_empty_growth_records(
+            apps=django_apps,
+            schema_editor=None,
+        )
+
+        self.assertFalse(CareRecord.objects.filter(id=empty_record.id).exists())
+        self.assertTrue(CareRecord.objects.filter(id=valid_record.id).exists())
 
 # Create your tests here.

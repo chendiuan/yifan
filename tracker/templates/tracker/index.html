@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>新生兒照護紀錄</title>
-    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=weight-correction-1" />
+    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=latest-weight-1" />
   </head>
   <body>
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -105,6 +105,10 @@
           <div>
             <span>最近紀錄</span>
             <strong id="lastRecord">無</strong>
+          </div>
+          <div>
+            <span>最新體重</span>
+            <strong id="latestWeight">尚無資料</strong>
           </div>
         </section>
       </aside>
@@ -304,6 +308,6 @@
       </section>
     </main>
 
-    <script src="{% static 'tracker/app.js' %}?v=weight-correction-1"></script>
+    <script src="{% static 'tracker/app.js' %}?v=latest-weight-1"></script>
   </body>
 </html>

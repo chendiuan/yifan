@@ -393,6 +393,12 @@ textarea {
   border-bottom: 1px solid var(--line);
 }
 
+.summary-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .summary-list div:last-child {
   padding-bottom: 0;
   border-bottom: 0;
@@ -859,7 +865,7 @@ textarea {
 
   .summary-list {
     grid-column: 1 / -1;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .summary-list div {

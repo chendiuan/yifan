@@ -54,6 +54,7 @@ const els = {
   peeCount: document.querySelector("#peeCount"),
   poopCount: document.querySelector("#poopCount"),
   lastRecord: document.querySelector("#lastRecord"),
+  latestWeight: document.querySelector("#latestWeight"),
   feedGap: document.querySelector("#feedGap"),
   longestSleep: document.querySelector("#longestSleep"),
   latestTemp: document.querySelector("#latestTemp"),
@@ -358,6 +359,9 @@ function renderSummary() {
   const sleeps = dayRecords.filter((record) => record.type === "sleep");
   const diapers = dayRecords.filter((record) => record.type === "diaper");
   const health = dayRecords.filter((record) => record.type === "health" && record.temperature);
+  const latestWeightRecord = state.records
+    .filter((record) => record.type === "growth" && record.weight)
+    .sort((a, b) => new Date(b.time) - new Date(a.time))[0];
 
   const sleepMinutes = sleeps.reduce((sum, record) => sum + Number(record.sleepMinutes || 0), 0);
   const longestSleep = sleeps.reduce((max, record) => Math.max(max, Number(record.sleepMinutes || 0)), 0);
@@ -368,6 +372,9 @@ function renderSummary() {
   els.peeCount.textContent = `${diapers.filter(hasPee).length} 次`;
   els.poopCount.textContent = `${diapers.filter(hasPoop).length} 次`;
   els.lastRecord.textContent = lastRecord ? `${typeLabels[lastRecord.type]} ${formatTime(lastRecord.time)}` : "無";
+  els.latestWeight.textContent = latestWeightRecord
+    ? `${formatWeight(latestWeightRecord.weight)} · ${formatDateCompact(latestWeightRecord.time)}`
+    : "尚無資料";
   els.longestSleep.textContent = longestSleep ? formatMinutes(longestSleep) : "尚無資料";
   els.latestTemp.textContent = health.length ? `${health.sort((a, b) => new Date(b.time) - new Date(a.time))[0].temperature} °C` : "尚無資料";
   els.feedGap.textContent = calculateFeedGap(feedings);
@@ -404,6 +411,13 @@ function formatWeight(value) {
   const kilograms = Number(value);
   if (!Number.isFinite(kilograms)) return `${value} kg`;
   return `${kilograms.toFixed(3)} kg（${Math.round(kilograms * 1000)} g）`;
+}
+
+function formatDateCompact(iso) {
+  return new Intl.DateTimeFormat("zh-Hant", {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
 }
 
 function renderProfile() {
