@@ -455,8 +455,8 @@ function buildGrowthChartSvg(records, metric) {
   const yMin = Math.max(0, rawMin - padding);
   const yMax = rawMax + padding;
   const yRange = yMax - yMin || 1;
-  const color = metric === "weight" ? "#d96d8a" : "#5da99a";
-  const fill = metric === "weight" ? "rgba(255, 140, 168, 0.14)" : "rgba(93, 169, 154, 0.14)";
+  const color = metric === "weight" ? "#df6f7f" : "#408f87";
+  const fill = metric === "weight" ? "rgba(223, 111, 127, 0.12)" : "rgba(64, 143, 135, 0.12)";
   const decimals = metric === "weight" ? 2 : 1;
   const unit = metric === "weight" ? "kg" : "cm";
 
