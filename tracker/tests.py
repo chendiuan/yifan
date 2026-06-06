@@ -1,9 +1,13 @@
 import base64
 import hashlib
 import hmac
+import importlib
 import json
+from decimal import InvalidOperation
 
-from django.test import Client, TestCase, override_settings
+from django.db import connection
+from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 
 from .ai_parser import (
     CareRecordParseError,
@@ -11,7 +15,7 @@ from .ai_parser import (
     OpenAIRequestError,
     parse_care_record_message,
 )
-from .models import CareRecord
+from .models import Baby, CareRecord
 from .views import handle_line_text_event
 
 
@@ -297,5 +301,41 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(status, "ai_error")
         self.assertEqual(CareRecord.objects.count(), 0)
         self.assertIn("OpenAI", replies[0][1])
+
+
+class DecimalDataRepairTests(TransactionTestCase):
+    def test_repairs_decimal_values_that_include_units(self):
+        baby = Baby.objects.create(name="Test Baby", birth_date="2026-05-18")
+        record = CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.GROWTH,
+            time=timezone.now(),
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tracker_carerecord SET weight = %s WHERE id = %s",
+                ["4.2kg", record.id],
+            )
+
+        with self.assertRaises((InvalidOperation, TypeError)):
+            CareRecord.objects.get(id=record.id)
+
+        repair_migration = importlib.import_module(
+            "tracker.migrations.0002_repair_invalid_decimal_values"
+        )
+
+        class SchemaEditorStub:
+            quote_name = connection.ops.quote_name
+
+            def __init__(self):
+                self.connection = connection
+
+        repair_migration.repair_invalid_decimal_values(
+            apps=None,
+            schema_editor=SchemaEditorStub(),
+        )
+
+        repaired = CareRecord.objects.get(id=record.id)
+        self.assertEqual(str(repaired.weight), "4.20")
 
 # Create your tests here.
