@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>新生兒照護紀錄</title>
-    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=topbar-1" />
+    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=growth-period-1" />
   </head>
   <body>
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -303,9 +303,16 @@
               <p class="eyebrow">Growth Trend</p>
               <h2>身高體重成長曲線</h2>
             </div>
-            <div class="growth-metric-switch" role="tablist" aria-label="成長曲線項目">
-              <button class="growth-metric-button is-active" data-growth-metric="weight" type="button" role="tab" aria-selected="true">體重</button>
-              <button class="growth-metric-button" data-growth-metric="height" type="button" role="tab" aria-selected="false">身高</button>
+            <div class="growth-chart-controls">
+              <div class="growth-period-switch" role="tablist" aria-label="成長曲線時間尺度">
+                <button class="growth-period-button is-active" data-growth-period="day" type="button" role="tab" aria-selected="true">日</button>
+                <button class="growth-period-button" data-growth-period="week" type="button" role="tab" aria-selected="false">週</button>
+                <button class="growth-period-button" data-growth-period="month" type="button" role="tab" aria-selected="false">月</button>
+              </div>
+              <div class="growth-metric-switch" role="tablist" aria-label="成長曲線項目">
+                <button class="growth-metric-button is-active" data-growth-metric="weight" type="button" role="tab" aria-selected="true">體重</button>
+                <button class="growth-metric-button" data-growth-metric="height" type="button" role="tab" aria-selected="false">身高</button>
+              </div>
             </div>
           </div>
           <div class="growth-stats" aria-label="成長統計">
@@ -353,6 +360,6 @@
       </section>
     </main>
 
-    <script src="{% static 'tracker/app.js' %}?v=topbar-1"></script>
+    <script src="{% static 'tracker/app.js' %}?v=growth-period-1"></script>
   </body>
 </html>

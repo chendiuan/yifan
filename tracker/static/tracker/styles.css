@@ -805,9 +805,15 @@ textarea {
   align-items: flex-start;
 }
 
+.growth-chart-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.growth-period-switch,
 .growth-metric-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(74px, 1fr));
   gap: 4px;
   padding: 4px;
   background: var(--surface-subtle);
@@ -815,14 +821,26 @@ textarea {
   border-radius: 7px;
 }
 
+.growth-period-switch {
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+}
+
+.growth-metric-switch {
+  grid-template-columns: repeat(2, minmax(74px, 1fr));
+}
+
+.growth-period-button,
 .growth-metric-button {
   min-height: 36px;
   padding: 0 13px;
   color: var(--muted);
+  font-weight: 800;
   background: transparent;
   border: 1px solid transparent;
+  border-radius: 5px;
 }
 
+.growth-period-button.is-active,
 .growth-metric-button.is-active {
   color: var(--teal);
   background: var(--surface);
@@ -1182,6 +1200,15 @@ textarea {
   }
 
   .growth-metric-switch {
+    width: 100%;
+  }
+
+  .growth-chart-controls {
+    display: grid;
+    width: 100%;
+  }
+
+  .growth-period-switch {
     width: 100%;
   }
 

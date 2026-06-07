@@ -38,6 +38,7 @@ const workspaceViewLabels = {
 const state = {
   activeType: "feeding",
   growthMetric: "weight",
+  growthPeriod: "day",
   workspaceView: "quick-entry",
   records: [],
   profile: { ...defaultProfile },
@@ -414,8 +415,9 @@ function renderSummary() {
 
 function renderGrowthChart() {
   const metric = state.growthMetric;
+  const period = state.growthPeriod;
   const unit = metric === "weight" ? "kg" : "cm";
-  const records = state.records
+  const sourceRecords = state.records
     .filter((record) => record.type === "growth" && record[metric])
     .map((record) => ({
       time: record.time,
@@ -423,6 +425,7 @@ function renderGrowthChart() {
     }))
     .filter((record) => Number.isFinite(record.value))
     .sort((a, b) => new Date(a.time) - new Date(b.time));
+  const records = aggregateGrowthRecords(sourceRecords, period);
 
   document.querySelectorAll(".growth-metric-button").forEach((button) => {
     const isActive = button.dataset.growthMetric === metric;
@@ -430,7 +433,13 @@ function renderGrowthChart() {
     button.setAttribute("aria-selected", String(isActive));
   });
 
-  els.growthRecordCount.textContent = `${records.length} 筆`;
+  document.querySelectorAll(".growth-period-button").forEach((button) => {
+    const isActive = button.dataset.growthPeriod === period;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+
+  els.growthRecordCount.textContent = `${records.length} 點`;
 
   if (!records.length) {
     els.growthLatestValue.textContent = "尚無資料";
@@ -459,7 +468,33 @@ function renderGrowthChart() {
     els.growthChange.classList.remove("is-positive", "is-negative");
   }
 
-  els.growthChart.innerHTML = buildGrowthChartSvg(records, metric);
+  els.growthChart.innerHTML = buildGrowthChartSvg(records, metric, period);
+}
+
+function aggregateGrowthRecords(records, period) {
+  const grouped = new Map();
+  records.forEach((record) => {
+    const date = new Date(record.time);
+    const key = period === "week"
+      ? weekKey(date)
+      : period === "month"
+        ? monthKey(date)
+        : localDateKey(date);
+    grouped.set(key, record);
+  });
+  return [...grouped.values()];
+}
+
+function weekKey(date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const distanceFromMonday = day === 0 ? 6 : day - 1;
+  start.setDate(start.getDate() - distanceFromMonday);
+  return localDateKey(start);
+}
+
+function monthKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
 }
 
 function formatGrowthValue(value, metric) {
@@ -467,7 +502,7 @@ function formatGrowthValue(value, metric) {
   return `${Number(value).toFixed(1)} cm`;
 }
 
-function buildGrowthChartSvg(records, metric) {
+function buildGrowthChartSvg(records, metric, period) {
   const width = 900;
   const height = 320;
   const margin = { top: 28, right: 28, bottom: 58, left: 68 };
@@ -509,7 +544,7 @@ function buildGrowthChartSvg(records, metric) {
   const dateLabels = labelIndexes.map((index) => {
     const point = points[index];
     return `
-      <text class="growth-date-label" x="${point.x}" y="${height - 22}" text-anchor="middle">${formatChartDate(point.time)}</text>
+      <text class="growth-date-label" x="${point.x}" y="${height - 22}" text-anchor="middle">${formatGrowthPeriodLabel(point.time, period)}</text>
     `;
   }).join("");
 
@@ -519,12 +554,12 @@ function buildGrowthChartSvg(records, metric) {
     : "";
   const circles = points.map((point) => `
     <circle class="growth-point" cx="${point.x}" cy="${point.y}" r="5" style="--point-color:${color}">
-      <title>${formatChartDate(point.time)} ${formatGrowthValue(point.value, metric)}</title>
+      <title>${formatGrowthPeriodLabel(point.time, period)} ${formatGrowthValue(point.value, metric)}</title>
     </circle>
   `).join("");
 
   return `
-    <svg class="growth-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${metric === "weight" ? "體重" : "身高"}成長曲線，共 ${records.length} 筆紀錄">
+    <svg class="growth-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${metric === "weight" ? "體重" : "身高"}${growthPeriodLabel(period)}成長曲線，共 ${records.length} 個趨勢點">
       <text class="growth-unit-label" x="${margin.left}" y="16">${unit}</text>
       ${gridLines}
       ${areaPath ? `<path class="growth-area" d="${areaPath}" fill="${fill}"></path>` : ""}
@@ -549,6 +584,28 @@ function formatChartDate(iso) {
     month: "numeric",
     day: "numeric",
   }).format(new Date(iso));
+}
+
+function formatGrowthPeriodLabel(iso, period) {
+  const date = new Date(iso);
+  if (period === "month") {
+    return new Intl.DateTimeFormat("zh-Hant", {
+      year: "numeric",
+      month: "numeric",
+    }).format(date);
+  }
+  if (period === "week") {
+    const start = new Date(date);
+    const day = start.getDay();
+    const distanceFromMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - distanceFromMonday);
+    return `${formatChartDate(start.toISOString())}週`;
+  }
+  return formatChartDate(iso);
+}
+
+function growthPeriodLabel(period) {
+  return { day: "每日", week: "每週", month: "每月" }[period] || "每日";
 }
 
 function hasPee(record) {
@@ -648,6 +705,13 @@ document.querySelectorAll("[data-workspace-target]").forEach((button) => {
 document.querySelectorAll(".growth-metric-button").forEach((button) => {
   button.addEventListener("click", () => {
     state.growthMetric = button.dataset.growthMetric;
+    renderGrowthChart();
+  });
+});
+
+document.querySelectorAll(".growth-period-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.growthPeriod = button.dataset.growthPeriod;
     renderGrowthChart();
   });
 });
