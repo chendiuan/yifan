@@ -97,6 +97,24 @@ def api_bootstrap(request):
     })
 
 
+@require_http_methods(["GET"])
+def api_export(request):
+    baby = get_baby()
+    records = [serialize_record(record) for record in CareRecord.objects.filter(baby=baby)]
+    exported_at = timezone.localtime().strftime("%Y-%m-%dT%H:%M:%S%z")
+
+    return JsonResponse(
+        {
+            "exportedAt": exported_at,
+            "version": 1,
+            "profile": serialize_baby(baby),
+            "recordCount": len(records),
+            "records": records,
+        },
+        json_dumps_params={"ensure_ascii": False, "indent": 2},
+    )
+
+
 @require_http_methods(["POST"])
 def api_profile(request):
     data = read_json(request)

@@ -81,6 +81,36 @@ class TrackerApiTests(TestCase):
         self.assertEqual(delete_response.status_code, 200)
         self.assertEqual(CareRecord.objects.count(), 0)
 
+    def test_export_returns_profile_and_all_records(self):
+        baby = Baby.objects.create(
+            id=1,
+            name="Test Baby",
+            birth_date="2026-05-18",
+        )
+        CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.FEEDING,
+            time=timezone.now(),
+            feed_kind="母乳",
+            feed_amount="90ml",
+        )
+        CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.GROWTH,
+            time=timezone.now(),
+            weight="3.060",
+        )
+
+        response = self.client.get("/api/export/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(data["profile"]["name"], "Test Baby")
+        self.assertEqual(data["recordCount"], 2)
+        self.assertEqual(len(data["records"]), 2)
+        self.assertIn("exportedAt", data)
+
 
 class LineWebhookTests(TestCase):
     @override_settings(LINE_CHANNEL_SECRET="test-channel-secret")
