@@ -18,7 +18,11 @@ from .ai_parser import (
     parse_care_record_message,
 )
 from .models import Baby, CareRecord
-from .views import handle_line_text_event, parse_weight
+from .views import (
+    handle_line_text_event,
+    parse_time_from_message,
+    parse_weight,
+)
 
 
 def line_signature(body, channel_secret):
@@ -502,6 +506,63 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(parse_weight("3069g"), Decimal("3.069"))
         self.assertEqual(parse_weight("3060"), Decimal("3.06"))
         self.assertEqual(parse_weight("3.2kg"), Decimal("3.2"))
+
+    def test_local_parser_uses_time_from_message(self):
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "早上8點喝奶90ml"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(OpenAIRequestError("fail")),
+            replier=lambda reply_token, text: True,
+        )
+
+        self.assertEqual(status, "created")
+        record = CareRecord.objects.get()
+        local_time = timezone.localtime(record.time)
+        self.assertEqual((local_time.hour, local_time.minute), (8, 0))
+        self.assertEqual(local_time.date(), timezone.localtime().date())
+
+    def test_local_parser_falls_back_to_now_without_time(self):
+        before = timezone.now()
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "喝奶90ml"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(OpenAIRequestError("fail")),
+            replier=lambda reply_token, text: True,
+        )
+        after = timezone.now()
+
+        self.assertEqual(status, "created")
+        record = CareRecord.objects.get()
+        self.assertTrue(before <= record.time <= after)
+
+    def test_parse_time_from_message_variants(self):
+        today = timezone.localtime().date()
+
+        def hm(message):
+            value = parse_time_from_message(message)
+            self.assertTrue(value, f"expected a time for {message!r}")
+            parsed = timezone.datetime.fromisoformat(value)
+            return parsed.date(), parsed.hour, parsed.minute
+
+        self.assertEqual(hm("早上8點喝奶"), (today, 8, 0))
+        self.assertEqual(hm("下午3點半睡覺"), (today, 15, 30))
+        self.assertEqual(hm("晚上10點15分尿尿"), (today, 22, 15))
+        self.assertEqual(hm("20:05喝奶90ml"), (today, 20, 5))
+        self.assertEqual(hm("中午12點餵奶"), (today, 12, 0))
+        self.assertEqual(hm("凌晨1點喝奶"), (today, 1, 0))
+        yesterday = today - timezone.timedelta(days=1)
+        self.assertEqual(hm("昨天晚上9點喝奶"), (yesterday, 21, 0))
+
+    def test_parse_time_from_message_returns_empty_without_time(self):
+        self.assertEqual(parse_time_from_message("喝奶90ml"), "")
+        self.assertEqual(parse_time_from_message("睡了2小時30分"), "")
+        self.assertEqual(parse_time_from_message(""), "")
 
     def test_message_weight_is_used_when_ai_result_omits_weight(self):
         baby = Baby.objects.create(

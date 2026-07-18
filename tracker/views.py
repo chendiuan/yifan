@@ -7,7 +7,7 @@ import re
 import sqlite3
 import threading
 from decimal import Decimal, InvalidOperation
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -304,7 +304,93 @@ def empty_parse_result(action="create_record", record_type=CareRecord.NOTE):
     }
 
 
+_TIME_DAY_OFFSETS = (
+    ("前天", -2),
+    ("昨晚", -1),
+    ("昨天", -1),
+    ("昨日", -1),
+    ("今晚", 0),
+    ("今早", 0),
+    ("今天", 0),
+    ("今日", 0),
+    ("明天", 1),
+    ("明日", 1),
+)
+
+
+def parse_time_from_message(message):
+    """從中文訊息推斷使用者指定的時間。
+
+    支援「早上8點」「昨天晚上10點半」「下午3點15分」「8:30」等常見寫法。
+    找不到明確時間時回傳空字串，讓呼叫端沿用當下時間。
+    """
+    text = str(message).strip()
+    if not text:
+        return ""
+
+    normalized = text.replace("：", ":")
+
+    day_offset = None
+    for keyword, offset in _TIME_DAY_OFFSETS:
+        if keyword in normalized:
+            day_offset = offset
+            break
+
+    hour = None
+    minute = 0
+
+    colon_match = re.search(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)", normalized)
+    clock_match = re.search(r"(\d{1,2})\s*[點点]\s*(半|\d{1,2})?\s*分?", normalized)
+    if colon_match:
+        hour = int(colon_match.group(1))
+        minute = int(colon_match.group(2))
+    elif clock_match:
+        hour = int(clock_match.group(1))
+        fraction = clock_match.group(2)
+        if fraction == "半":
+            minute = 30
+        elif fraction is not None:
+            minute = int(fraction)
+
+    if hour is not None:
+        if any(p in normalized for p in ("下午", "午後", "傍晚", "黃昏")):
+            if hour < 12:
+                hour += 12
+        elif any(p in normalized for p in ("晚上", "夜間", "夜裡", "半夜", "夜")):
+            if hour < 12:
+                hour += 12
+            elif hour == 12:
+                hour = 0
+        elif "中午" in normalized:
+            if hour < 12:
+                hour = 12
+        elif any(p in normalized for p in ("凌晨", "清晨", "早上", "上午", "早")):
+            if hour == 12:
+                hour = 0
+
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            hour = None
+
+    if hour is None and day_offset is None:
+        return ""
+
+    now = timezone.localtime()
+    base_date = (now + timedelta(days=day_offset or 0)).date()
+    if hour is None:
+        target = datetime.combine(base_date, now.time().replace(second=0, microsecond=0))
+    else:
+        target = datetime.combine(base_date, time(hour, minute))
+    return target.strftime("%Y-%m-%dT%H:%M")
+
+
 def parse_local_care_record_message(message):
+    result = match_local_care_record(message)
+    if result is not None:
+        result["time"] = parse_time_from_message(message)
+    return result
+
+
+def match_local_care_record(message):
     text = str(message).strip()
     normalized = text.lower().replace(",", "")
     action = "correct_record" if any(
@@ -404,6 +490,11 @@ def enrich_parse_result_from_message(result, message):
         amount, unit = weight_match.groups()
         enriched["record_type"] = CareRecord.GROWTH
         enriched["weight"] = f"{amount}{unit}"
+
+    if not enriched.get("time"):
+        matched_time = parse_time_from_message(message)
+        if matched_time:
+            enriched["time"] = matched_time
 
     return enriched
 
