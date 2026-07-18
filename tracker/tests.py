@@ -206,7 +206,7 @@ class LineTextEventHandlerTests(TestCase):
         event = {
             "type": "message",
             "replyToken": "reply-token",
-            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+            "message": {"type": "text", "text": "寶寶今天狀態普通"},
         }
 
         status = handle_line_text_event(event, parser=parser, replier=replier)
@@ -272,7 +272,7 @@ class LineTextEventHandlerTests(TestCase):
         event = {
             "type": "message",
             "replyToken": "reply-token",
-            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+            "message": {"type": "text", "text": "寶寶今天狀態普通"},
         }
 
         status = handle_line_text_event(event, parser=parser, replier=replier)
@@ -294,7 +294,7 @@ class LineTextEventHandlerTests(TestCase):
         event = {
             "type": "message",
             "replyToken": "reply-token",
-            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+            "message": {"type": "text", "text": "寶寶今天狀態普通"},
         }
 
         status = handle_line_text_event(event, parser=parser, replier=replier)
@@ -302,6 +302,62 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(status, "ai_error")
         self.assertEqual(CareRecord.objects.count(), 0)
         self.assertIn("OpenAI", replies[0][1])
+
+    def test_local_parser_records_feeding_when_openai_request_fails(self):
+        replies = []
+
+        def parser(message):
+            raise OpenAIRequestError("temporary failure")
+
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+            },
+            parser=parser,
+            replier=lambda reply_token, text: replies.append(text) or True,
+        )
+
+        self.assertEqual(status, "created")
+        record = CareRecord.objects.get()
+        self.assertEqual(record.record_type, CareRecord.FEEDING)
+        self.assertEqual(record.feed_amount, "90ml")
+        self.assertIn("已記錄", replies[0])
+
+    def test_local_parser_records_diaper_without_openai(self):
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "尿尿便便黃色中等"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(OpenAIRequestError("fail")),
+            replier=lambda reply_token, text: True,
+        )
+
+        self.assertEqual(status, "created")
+        record = CareRecord.objects.get()
+        self.assertTrue(record.pee)
+        self.assertTrue(record.poop)
+        self.assertEqual(record.poop_amount, "中等")
+        self.assertEqual(record.poop_color, "黃色")
+
+    def test_local_parser_records_sleep_duration_without_openai(self):
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "睡了2小時30分"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(OpenAIRequestError("fail")),
+            replier=lambda reply_token, text: True,
+        )
+
+        self.assertEqual(status, "created")
+        record = CareRecord.objects.get()
+        self.assertEqual(record.record_type, CareRecord.SLEEP)
+        self.assertEqual(record.sleep_minutes, 150)
 
     def test_correction_replaces_latest_record_of_same_type(self):
         baby = Baby.objects.create(

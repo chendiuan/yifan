@@ -226,6 +226,112 @@ def safe_reply_to_line(reply_token, text, replier=reply_to_line):
         return False
 
 
+def empty_parse_result(action="create_record", record_type=CareRecord.NOTE):
+    return {
+        "action": action,
+        "record_type": record_type,
+        "time": "",
+        "note": "",
+        "feed_kind": "",
+        "feed_amount": "",
+        "sleep_minutes": None,
+        "pee": False,
+        "poop": False,
+        "poop_amount": "",
+        "poop_color": "",
+        "temperature": "",
+        "symptom": "",
+        "weight": "",
+        "height": "",
+        "clarification": "",
+    }
+
+
+def parse_local_care_record_message(message):
+    text = str(message).strip()
+    normalized = text.lower().replace(",", "")
+    action = "correct_record" if any(
+        keyword in normalized for keyword in ("更正", "改成", "應該是")
+    ) else "create_record"
+
+    weight_match = re.search(
+        r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(kg|公斤|g|公克|克)\b",
+        normalized,
+    )
+    if "體重" in normalized or weight_match:
+        result = empty_parse_result(action, CareRecord.GROWTH)
+        if weight_match:
+            amount, unit = weight_match.groups()
+            result["weight"] = f"{amount}{unit}"
+        return result
+
+    height_match = re.search(
+        r"(?:身高|身長)\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(cm|公分)?",
+        normalized,
+    )
+    if height_match:
+        result = empty_parse_result(action, CareRecord.GROWTH)
+        result["height"] = height_match.group(1)
+        return result
+
+    temperature_match = re.search(
+        r"(?:體溫|燒|發燒)\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:°c|度|c)?",
+        normalized,
+    )
+    if temperature_match:
+        result = empty_parse_result(action, CareRecord.HEALTH)
+        result["temperature"] = temperature_match.group(1)
+        return result
+
+    amount_match = re.search(
+        r"([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*(ml|cc|c\.c\.|毫升)\b",
+        normalized,
+    )
+    if amount_match and any(keyword in normalized for keyword in ("奶", "喝", "母乳", "配方")):
+        result = empty_parse_result(action, CareRecord.FEEDING)
+        amount, unit = amount_match.groups()
+        result["feed_amount"] = f"{amount}{unit}"
+        if "配方" in normalized:
+            result["feed_kind"] = "配方奶"
+        elif "瓶" in normalized:
+            result["feed_kind"] = "瓶餵母乳"
+        else:
+            result["feed_kind"] = "母乳"
+        return result
+
+    if any(keyword in normalized for keyword in ("尿", "小便", "便便", "大便", "屎")):
+        result = empty_parse_result(action, CareRecord.DIAPER)
+        result["pee"] = any(keyword in normalized for keyword in ("尿", "小便"))
+        result["poop"] = any(keyword in normalized for keyword in ("便便", "大便", "屎"))
+        for amount in ("少量", "中等", "大量", "爆量"):
+            if amount in text:
+                result["poop_amount"] = amount
+                break
+        for color in ("黃色", "芥末黃", "綠色", "棕色", "黑色", "紅色", "白色"):
+            if color in text:
+                result["poop_color"] = color
+                break
+        return result
+
+    if "睡" in normalized:
+        hours_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:小時|hr|hour|h)", normalized)
+        minutes_match = re.search(r"(\d+)\s*(?:分鐘|分|min|m)\b", normalized)
+        minutes = 0
+        if hours_match:
+            minutes += int(Decimal(hours_match.group(1)) * 60)
+        if minutes_match:
+            minutes += int(minutes_match.group(1))
+        if "半小時" in normalized:
+            minutes += 30
+
+        if minutes:
+            result = empty_parse_result(action, CareRecord.SLEEP)
+            result["sleep_minutes"] = minutes
+            return result
+
+    return None
+
+
 def enrich_parse_result_from_message(result, message):
     enriched = dict(result)
     normalized_message = str(message).strip().lower().replace(",", "")
@@ -253,15 +359,32 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
     reply_token = event.get("replyToken", "")
     text = message.get("text", "")
 
+    result = parse_local_care_record_message(text)
     try:
-        result = parser(text)
+        if result is None:
+            result = parser(text)
     except OpenAIConfigurationError:
+        result = parse_local_care_record_message(text)
+        if result is not None:
+            record = create_record_from_parse_result(result)
+            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            return "created"
         safe_reply_to_line(reply_token, "AI 尚未設定完成，請先設定 OPENAI_API_KEY。", replier)
         return "configuration_error"
     except OpenAIRequestError:
+        result = parse_local_care_record_message(text)
+        if result is not None:
+            record = create_record_from_parse_result(result)
+            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            return "created"
         safe_reply_to_line(reply_token, "AI 目前無法使用，請檢查 OpenAI 額度或付款設定。", replier)
         return "ai_error"
     except CareRecordParseError:
+        result = parse_local_care_record_message(text)
+        if result is not None:
+            record = create_record_from_parse_result(result)
+            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            return "created"
         safe_reply_to_line(reply_token, "我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。", replier)
         return "parse_error"
 
