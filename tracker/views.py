@@ -240,7 +240,7 @@ def safe_reply_to_line(reply_token, text, replier=reply_to_line):
 
     try:
         return replier(reply_token, text)
-    except (LineConfigurationError, LineReplyError):
+    except (LineConfigurationError, LineReplyError, OSError):
         return False
 
 

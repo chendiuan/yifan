@@ -250,6 +250,42 @@ class LineTextEventHandlerTests(TestCase):
         self.assertIn("已記錄", replies[0][1])
         self.assertIn("90ml", replies[0][1])
 
+    def test_line_reply_write_error_does_not_block_record_creation(self):
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "feeding",
+                "time": "2026-06-04T09:15",
+                "note": "",
+                "feed_kind": "breast",
+                "feed_amount": "90ml",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        def replier(reply_token, text):
+            raise OSError("write error")
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "message": {"type": "text", "text": "record feeding"},
+        }
+
+        status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "created")
+        self.assertEqual(CareRecord.objects.count(), 1)
+        self.assertEqual(CareRecord.objects.get().feed_amount, "90ml")
+
     def test_replies_with_clarification_without_creating_record(self):
         replies = []
 
