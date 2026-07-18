@@ -35,6 +35,8 @@ const workspaceViewLabels = {
   "care-timeline": "照護時間軸",
 };
 
+const AUTO_REFRESH_MS = 10000;
+
 const state = {
   activeType: "feeding",
   growthMetric: "weight",
@@ -44,6 +46,8 @@ const state = {
   profile: { ...defaultProfile },
   selectedDate: localDateKey(),
 };
+
+let refreshInFlight = false;
 
 const els = {
   todayLabel: document.querySelector("#todayLabel"),
@@ -649,8 +653,12 @@ function formatDateCompact(iso) {
 }
 
 function renderProfile() {
-  els.babyName.value = state.profile.name || "";
-  els.birthDate.value = state.profile.birthDate || "";
+  if (document.activeElement !== els.babyName) {
+    els.babyName.value = state.profile.name || "";
+  }
+  if (document.activeElement !== els.birthDate) {
+    els.birthDate.value = state.profile.birthDate || "";
+  }
   els.babyAge.textContent = calculateAge(state.profile.birthDate);
 }
 
@@ -687,11 +695,23 @@ function resetForm() {
   syncPoopFields();
 }
 
+async function refreshData({ skipWhenHidden = false } = {}) {
+  if (skipWhenHidden && document.hidden) return;
+  if (refreshInFlight) return;
+
+  refreshInFlight = true;
+  try {
+    const data = await apiFetch("/api/bootstrap/", { cache: "no-store" });
+    state.profile = data.profile || { ...defaultProfile };
+    state.records = data.records || [];
+    renderAll();
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
 async function loadData() {
-  const data = await apiFetch("/api/bootstrap/");
-  state.profile = data.profile || { ...defaultProfile };
-  state.records = data.records || [];
-  renderAll();
+  return refreshData();
 }
 
 document.querySelectorAll(".type-tab").forEach((button) => {
@@ -781,6 +801,20 @@ els.exportButton.addEventListener("click", () => {
   link.download = `baby-records-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
+});
+
+window.setInterval(() => {
+  refreshData({ skipWhenHidden: true }).catch((error) => {
+    console.warn("自動同步失敗", error);
+  });
+}, AUTO_REFRESH_MS);
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshData().catch((error) => {
+      console.warn("自動同步失敗", error);
+    });
+  }
 });
 
 function syncPoopFields() {
