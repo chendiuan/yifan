@@ -20,6 +20,7 @@ from .ai_parser import (
 from .models import Baby, CareRecord
 from .views import (
     handle_line_text_event,
+    is_undo_last_request,
     parse_time_from_message,
     parse_weight,
 )
@@ -563,6 +564,60 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(parse_time_from_message("喝奶90ml"), "")
         self.assertEqual(parse_time_from_message("睡了2小時30分"), "")
         self.assertEqual(parse_time_from_message(""), "")
+
+    def test_undo_request_deletes_latest_record(self):
+        baby = Baby.objects.create(id=1, name="Test Baby", birth_date="2026-05-18")
+        CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.FEEDING,
+            time=timezone.now() - timezone.timedelta(hours=1),
+            feed_amount="80ml",
+        )
+        latest = CareRecord.objects.create(
+            baby=baby,
+            record_type=CareRecord.DIAPER,
+            time=timezone.now(),
+            pee=True,
+        )
+        replies = []
+
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "刪除剛剛那筆"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(AssertionError("parser should not run")),
+            replier=lambda reply_token, text: replies.append(text) or True,
+        )
+
+        self.assertEqual(status, "undone")
+        self.assertFalse(CareRecord.objects.filter(id=latest.id).exists())
+        self.assertEqual(CareRecord.objects.count(), 1)
+        self.assertIn("已刪除最近一筆", replies[0])
+
+    def test_undo_request_without_records_replies_not_found(self):
+        replies = []
+
+        status = handle_line_text_event(
+            {
+                "type": "message",
+                "replyToken": "reply-token",
+                "message": {"type": "text", "text": "撤銷"},
+            },
+            parser=lambda message: (_ for _ in ()).throw(AssertionError("parser should not run")),
+            replier=lambda reply_token, text: replies.append(text) or True,
+        )
+
+        self.assertEqual(status, "undo_not_found")
+        self.assertEqual(CareRecord.objects.count(), 0)
+        self.assertIn("沒有可以撤銷", replies[0])
+
+    def test_is_undo_last_request_matches_expected_phrases(self):
+        for phrase in ("撤銷", "撤回", "刪除剛剛", "刪掉最後一筆", "刪除上一筆", "undo"):
+            self.assertTrue(is_undo_last_request(phrase), phrase)
+        for phrase in ("剛剛喝奶90ml", "寶寶剛剛吐奶", "體重3060g", "刪除功能好用"):
+            self.assertFalse(is_undo_last_request(phrase), phrase)
 
     def test_message_weight_is_used_when_ai_result_omits_weight(self):
         baby = Baby.objects.create(

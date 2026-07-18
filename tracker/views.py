@@ -243,6 +243,24 @@ def replace_latest_record_from_parse_result(result):
         return create_record_from_parse_result(result, baby=baby)
 
 
+def delete_latest_record():
+    baby = get_baby()
+
+    with transaction.atomic():
+        latest = (
+            CareRecord.objects.select_for_update()
+            .filter(baby=baby)
+            .order_by("-created_at", "-time")
+            .first()
+        )
+        if latest is None:
+            return None
+
+        description = format_created_reply(latest).replace("已記錄：", "", 1)
+        latest.delete()
+        return description
+
+
 def format_weight(weight):
     kilograms = Decimal(weight).quantize(Decimal("0.001"))
     grams = int(kilograms * 1000)
@@ -499,6 +517,33 @@ def enrich_parse_result_from_message(result, message):
     return enriched
 
 
+_UNDO_STANDALONE = ("撤銷", "撤回", "收回", "undo")
+_UNDO_VERBS = ("刪除", "刪掉", "刪去", "移除", "取消", "delete")
+_UNDO_RECENCY = (
+    "剛剛",
+    "剛才",
+    "剛那",
+    "最近",
+    "最後",
+    "上一筆",
+    "上一個",
+    "這筆",
+    "那筆",
+    "last",
+)
+
+
+def is_undo_last_request(message):
+    normalized = str(message).strip().lower().replace(" ", "").replace("　", "")
+    if not normalized:
+        return False
+    if any(keyword in normalized for keyword in _UNDO_STANDALONE):
+        return True
+    return any(verb in normalized for verb in _UNDO_VERBS) and any(
+        word in normalized for word in _UNDO_RECENCY
+    )
+
+
 def handle_line_text_event(event, parser=parse_care_record_message, replier=reply_to_line):
     message = event.get("message", {})
     if event.get("type") != "message" or message.get("type") != "text":
@@ -506,6 +551,14 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
 
     reply_token = event.get("replyToken", "")
     text = message.get("text", "")
+
+    if is_undo_last_request(text):
+        description = delete_latest_record()
+        if description is None:
+            safe_reply_to_line(reply_token, "目前沒有可以撤銷的紀錄。", replier)
+            return "undo_not_found"
+        safe_reply_to_line(reply_token, f"已刪除最近一筆：{description}", replier)
+        return "undone"
 
     result = parse_local_care_record_message(text)
     try:

@@ -67,6 +67,7 @@ const els = {
   sleepTotal: document.querySelector("#sleepTotal"),
   peeCount: document.querySelector("#peeCount"),
   poopCount: document.querySelector("#poopCount"),
+  feedVolume: document.querySelector("#feedVolume"),
   lastRecord: document.querySelector("#lastRecord"),
   latestWeight: document.querySelector("#latestWeight"),
   growthChart: document.querySelector("#growthChart"),
@@ -402,12 +403,14 @@ function renderSummary() {
 
   const sleepMinutes = sleeps.reduce((sum, record) => sum + Number(record.sleepMinutes || 0), 0);
   const longestSleep = sleeps.reduce((max, record) => Math.max(max, Number(record.sleepMinutes || 0)), 0);
+  const feedVolume = feedings.reduce((sum, record) => sum + parseFeedMl(record.feedAmount), 0);
   const lastRecord = [...dayRecords].sort((a, b) => new Date(b.time) - new Date(a.time))[0];
 
   els.feedCount.textContent = `${feedings.length} 次`;
   els.sleepTotal.textContent = `${(sleepMinutes / 60).toFixed(1)} 小時`;
   els.peeCount.textContent = `${diapers.filter(hasPee).length} 次`;
   els.poopCount.textContent = `${diapers.filter(hasPoop).length} 次`;
+  els.feedVolume.textContent = feedVolume > 0 ? `${Number(feedVolume.toFixed(1))} ml` : "尚無資料";
   els.lastRecord.textContent = lastRecord ? `${typeLabels[lastRecord.type]} ${formatTime(lastRecord.time)}` : "無";
   els.latestWeight.textContent = latestWeightRecord
     ? `${formatWeight(latestWeightRecord.weight)} · ${formatDateCompact(latestWeightRecord.time)}`
@@ -637,6 +640,14 @@ function calculateFeedGap(feedings) {
 
 function formatMinutes(minutes) {
   return `${Math.floor(minutes / 60)} 小時 ${minutes % 60} 分`;
+}
+
+function parseFeedMl(amount) {
+  if (!amount) return 0;
+  const match = String(amount)
+    .toLowerCase()
+    .match(/(\d+(?:\.\d+)?)\s*(ml|cc|c\.c\.|毫升)/);
+  return match ? Number(match[1]) : 0;
 }
 
 function formatWeight(value) {
