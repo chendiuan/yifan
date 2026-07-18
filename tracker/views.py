@@ -2,12 +2,14 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import re
+import threading
 from decimal import Decimal, InvalidOperation
 from datetime import date
 
 from django.conf import settings
-from django.db import transaction
+from django.db import close_old_connections, transaction
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -22,6 +24,9 @@ from .ai_parser import (
 )
 from .line_client import LineConfigurationError, LineReplyError, reply_to_line
 from .models import Baby, CareRecord
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_baby():
@@ -443,6 +448,31 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
     return "created"
 
 
+def process_line_events(events):
+    for event in events:
+        handle_line_text_event(event)
+
+
+def process_line_events_safely(events):
+    close_old_connections()
+    try:
+        process_line_events(events)
+    except Exception:
+        logger.exception("Failed to process LINE webhook events")
+    finally:
+        close_old_connections()
+
+
+def schedule_line_events(events):
+    worker = threading.Thread(
+        target=process_line_events_safely,
+        args=(events,),
+        daemon=True,
+    )
+    worker.start()
+    return worker
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def line_webhook(request):
@@ -463,12 +493,15 @@ def line_webhook(request):
     if data is None:
         return HttpResponseBadRequest("Invalid JSON")
 
-    for event in data.get("events", []):
-        handle_line_text_event(event)
+    events = list(data.get("events", []))
+    if getattr(settings, "LINE_WEBHOOK_ASYNC", True):
+        schedule_line_events(events)
+    else:
+        process_line_events(events)
 
     return JsonResponse({
         "ok": True,
-        "events": len(data.get("events", [])),
+        "events": len(events),
     })
 
 

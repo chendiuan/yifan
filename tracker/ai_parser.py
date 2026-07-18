@@ -100,7 +100,10 @@ def parse_care_record_message(message, client=None):
 
         from openai import OpenAI
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=settings.OPENAI_TIMEOUT_SECONDS,
+        )
 
     now = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
     try:

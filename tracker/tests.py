@@ -4,6 +4,7 @@ import hmac
 import importlib
 import json
 from decimal import Decimal, InvalidOperation
+from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.db import connection
@@ -127,6 +128,24 @@ class LineWebhookTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"ok": True, "events": 1})
+
+    @override_settings(LINE_CHANNEL_SECRET="test-channel-secret", LINE_WEBHOOK_ASYNC=True)
+    def test_schedules_line_events_asynchronously(self):
+        event = {"type": "message", "message": {"type": "text", "text": "record"}}
+        body = json.dumps({"events": [event]}).encode("utf-8")
+        secret = "test-channel-secret"
+
+        with patch("tracker.views.schedule_line_events") as schedule_line_events:
+            response = self.client.post(
+                "/line/webhook/",
+                data=body,
+                content_type="application/json",
+                HTTP_X_LINE_SIGNATURE=line_signature(body, secret),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True, "events": 1})
+        schedule_line_events.assert_called_once_with([event])
 
     @override_settings(LINE_CHANNEL_SECRET="")
     def test_rejects_when_line_channel_secret_is_not_configured(self):
