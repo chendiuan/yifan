@@ -4,9 +4,11 @@ import hmac
 import json
 import logging
 import re
+import sqlite3
 import threading
 from decimal import Decimal, InvalidOperation
 from datetime import date
+from pathlib import Path
 
 from django.conf import settings
 from django.db import close_old_connections, transaction
@@ -79,6 +81,34 @@ def read_json(request):
         return None
 
 
+def backup_sqlite_database(reason):
+    db_config = settings.DATABASES["default"]
+    if db_config["ENGINE"] != "django.db.backends.sqlite3":
+        return None
+
+    db_path = Path(db_config["NAME"])
+    if str(db_path) == ":memory:" or not db_path.exists():
+        return None
+
+    timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+    safe_reason = re.sub(r"[^a-zA-Z0-9_-]+", "-", reason).strip("-") or "backup"
+    backup_dir = db_path.parent / "db_backups"
+    backup_dir.mkdir(exist_ok=True)
+    backup_path = backup_dir / f"{db_path.stem}-{safe_reason}-{timestamp}{db_path.suffix}"
+
+    source = sqlite3.connect(db_path)
+    try:
+        destination = sqlite3.connect(backup_path)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+    finally:
+        source.close()
+
+    return backup_path
+
+
 def is_valid_line_signature(body, signature, channel_secret):
     if not signature or not channel_secret:
         return False
@@ -138,8 +168,12 @@ def api_profile(request):
 def api_records(request):
     baby = get_baby()
     if request.method == "DELETE":
+        backup_path = backup_sqlite_database("before-clear-records")
         CareRecord.objects.filter(baby=baby).delete()
-        return JsonResponse({"records": []})
+        return JsonResponse({
+            "records": [],
+            "backup": str(backup_path) if backup_path else "",
+        })
 
     data = read_json(request)
     if data is None:
