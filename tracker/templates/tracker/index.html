@@ -232,7 +232,12 @@
             <div class="form-grid">
               <label>
                 時間
-                <input id="recordTime" name="time" type="datetime-local" lang="en-GB" required />
+                <div class="time-input-group">
+                  <input id="recordDate" name="date" type="date" required />
+                  <select id="recordHour" name="hour" aria-label="小時"></select>
+                  <span class="time-input-sep">:</span>
+                  <select id="recordMinute" name="minute" aria-label="分鐘"></select>
+                </div>
               </label>
               <label class="dynamic-field" data-for="feeding">
                 類型

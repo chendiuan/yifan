@@ -84,7 +84,9 @@ const els = {
   weeklyPoopAvg: document.querySelector("#weeklyPoopAvg"),
   monthlyPoopAvg: document.querySelector("#monthlyPoopAvg"),
   recordForm: document.querySelector("#recordForm"),
-  recordTime: document.querySelector("#recordTime"),
+  recordDate: document.querySelector("#recordDate"),
+  recordHour: document.querySelector("#recordHour"),
+  recordMinute: document.querySelector("#recordMinute"),
   recordsList: document.querySelector("#recordsList"),
   dayTableBody: document.querySelector("#dayTableBody"),
   filterType: document.querySelector("#filterType"),
@@ -122,8 +124,26 @@ function pad(value) {
   return String(value).padStart(2, "0");
 }
 
-function toDatetimeLocal(date = new Date()) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+// The native <input type="datetime-local"> / <input type="time"> picker's
+// 12h vs 24h display follows the browser/OS locale and can't be forced
+// reliably from the page (lang="en-GB" and the -u-hc-h23 Unicode extension
+// both fail to override it in current Chrome). Using our own hour/minute
+// <select> elements sidesteps the native widget entirely, so the clock is
+// always 24-hour no matter the user's browser or system settings.
+function populateTimeSelects() {
+  els.recordHour.innerHTML = Array.from({ length: 24 }, (_, hour) => `<option value="${pad(hour)}">${pad(hour)}</option>`).join("");
+  els.recordMinute.innerHTML = Array.from({ length: 60 }, (_, minute) => `<option value="${pad(minute)}">${pad(minute)}</option>`).join("");
+}
+
+function setRecordDateTime(date = new Date()) {
+  els.recordDate.value = localDateKey(date);
+  els.recordHour.value = pad(date.getHours());
+  els.recordMinute.value = pad(date.getMinutes());
+}
+
+function getRecordDateTimeValue() {
+  if (!els.recordDate.value) return "";
+  return `${els.recordDate.value}T${els.recordHour.value}:${els.recordMinute.value}`;
 }
 
 function localDateKey(date = new Date()) {
@@ -252,7 +272,7 @@ function buildRecord() {
   const type = state.activeType;
   const record = {
     type,
-    time: els.recordTime.value,
+    time: getRecordDateTimeValue(),
     note: getFormValue("note"),
   };
 
@@ -775,7 +795,7 @@ async function saveProfile() {
 
 function resetForm() {
   els.recordForm.reset();
-  els.recordTime.value = toDatetimeLocal();
+  setRecordDateTime();
   syncDiaperChoices();
   syncPoopFields();
 }
@@ -926,7 +946,8 @@ function syncDiaperChoices() {
 
 els.todayLabel.textContent = formatDateLong();
 els.selectedDate.value = state.selectedDate;
-els.recordTime.value = toDatetimeLocal();
+populateTimeSelects();
+setRecordDateTime();
 setActiveType(state.activeType);
 setWorkspaceView(state.workspaceView);
 syncDiaperChoices();

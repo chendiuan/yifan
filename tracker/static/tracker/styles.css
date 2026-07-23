@@ -665,6 +665,19 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.time-input-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.time-input-sep {
+  color: var(--muted);
+  font-weight: 750;
+  text-align: center;
+}
+
 .dynamic-field {
   display: none;
 }
