@@ -90,6 +90,8 @@ PARSER_INSTRUCTIONS = """
 - feed_amount 保留單位，例如 90ml。
 - temperature、weight、height 只放數字字串，不要放單位。
 - weight 一律換算成公斤；例如 3069g 輸出 3.069，4.2kg 輸出 4.2。
+- 所有文字欄位（note、feed_kind、symptom、poop_color、clarification 等）一律只能使用「繁體中文」，絕對不可以出現任何英文字詞或拼音。
+- 即使使用者輸入英文或中英夾雜，也要把 note、symptom、clarification 等文字欄位翻譯成繁體中文再輸出；不要保留原始英文。
 """.strip()
 
 

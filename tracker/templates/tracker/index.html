@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>新生兒照護紀錄</title>
-    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=growth-period-1" />
+    <link rel="stylesheet" href="{% static 'tracker/styles.css' %}?v=care-averages-1" />
   </head>
   <body>
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
@@ -173,6 +173,39 @@
             <span>最新體重</span>
             <strong id="latestWeight">尚無資料</strong>
           </div>
+        </section>
+
+        <section class="trends-panel" aria-label="週與月平均">
+          <div class="panel-title">
+            <p class="eyebrow">Averages</p>
+            <h2>週 / 月平均</h2>
+          </div>
+          <table class="trends-table">
+            <thead>
+              <tr>
+                <th scope="col">項目</th>
+                <th scope="col">近 7 天</th>
+                <th scope="col">近 30 天</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>奶量／天</td>
+                <td id="weeklyFeedAvg">尚無資料</td>
+                <td id="monthlyFeedAvg">尚無資料</td>
+              </tr>
+              <tr>
+                <td>小便次數／天</td>
+                <td id="weeklyPeeAvg">尚無資料</td>
+                <td id="monthlyPeeAvg">尚無資料</td>
+              </tr>
+              <tr>
+                <td>大便次數／天</td>
+                <td id="weeklyPoopAvg">尚無資料</td>
+                <td id="monthlyPoopAvg">尚無資料</td>
+              </tr>
+            </tbody>
+          </table>
         </section>
       </aside>
 
@@ -364,6 +397,6 @@
       </section>
     </main>
 
-    <script src="{% static 'tracker/app.js' %}?v=feed-volume-1"></script>
+    <script src="{% static 'tracker/app.js' %}?v=care-averages-1"></script>
   </body>
 </html>

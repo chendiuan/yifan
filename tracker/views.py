@@ -24,7 +24,7 @@ from .ai_parser import (
     OpenAIRequestError,
     parse_care_record_message,
 )
-from .line_client import LineConfigurationError, LineReplyError, reply_to_line
+from .line_client import LineConfigurationError, LineReplyError, push_to_line, reply_to_line
 from .models import Baby, CareRecord
 
 
@@ -291,7 +291,22 @@ def format_created_reply(record):
     return " ".join(parts)
 
 
-def safe_reply_to_line(reply_token, text, replier=reply_to_line):
+def get_line_user_id(event):
+    return str((event.get("source") or {}).get("userId", "")).strip()
+
+
+def safe_reply_to_line(reply_token, text, replier=reply_to_line, user_id="", pusher=push_to_line):
+    # LINE's replyToken expires ~10 seconds after the event is sent, which can
+    # be blown through by the OpenAI parsing call alone. Push doesn't expire,
+    # so prefer it whenever we know who to push to, and only fall back to
+    # reply (e.g. when no user id is available) below.
+    if user_id:
+        try:
+            if pusher(user_id, text):
+                return True
+        except (LineConfigurationError, LineReplyError, OSError):
+            pass
+
     if not reply_token:
         return False
 
@@ -550,14 +565,18 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
         return "ignored"
 
     reply_token = event.get("replyToken", "")
+    user_id = get_line_user_id(event)
     text = message.get("text", "")
+
+    def reply(text_to_send):
+        return safe_reply_to_line(reply_token, text_to_send, replier, user_id=user_id, pusher=push_to_line)
 
     if is_undo_last_request(text):
         description = delete_latest_record()
         if description is None:
-            safe_reply_to_line(reply_token, "目前沒有可以撤銷的紀錄。", replier)
+            reply("目前沒有可以撤銷的紀錄。")
             return "undo_not_found"
-        safe_reply_to_line(reply_token, f"已刪除最近一筆：{description}", replier)
+        reply(f"已刪除最近一筆：{description}")
         return "undone"
 
     result = parse_local_care_record_message(text)
@@ -568,25 +587,25 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
         result = parse_local_care_record_message(text)
         if result is not None:
             record = create_record_from_parse_result(result)
-            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            reply(format_created_reply(record))
             return "created"
-        safe_reply_to_line(reply_token, "AI 尚未設定完成，請先設定 OPENAI_API_KEY。", replier)
+        reply("AI 尚未設定完成，請先設定 OPENAI_API_KEY。")
         return "configuration_error"
     except OpenAIRequestError:
         result = parse_local_care_record_message(text)
         if result is not None:
             record = create_record_from_parse_result(result)
-            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            reply(format_created_reply(record))
             return "created"
-        safe_reply_to_line(reply_token, "AI 目前無法使用，請檢查 OpenAI 額度或付款設定。", replier)
+        reply("AI 目前無法使用，請檢查 OpenAI 額度或付款設定。")
         return "ai_error"
     except CareRecordParseError:
         result = parse_local_care_record_message(text)
         if result is not None:
             record = create_record_from_parse_result(result)
-            safe_reply_to_line(reply_token, format_created_reply(record), replier)
+            reply(format_created_reply(record))
             return "created"
-        safe_reply_to_line(reply_token, "我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。", replier)
+        reply("我剛剛沒有成功解析，請再簡短說一次，例如：剛剛喝奶 90ml。")
         return "parse_error"
 
     result = enrich_parse_result_from_message(result, text)
@@ -597,32 +616,28 @@ def handle_line_text_event(event, parser=parse_care_record_message, replier=repl
         and not result.get("weight")
         and not result.get("height")
     ):
-        safe_reply_to_line(reply_token, "請提供體重或身高，例如：寶寶今天體重3060g。", replier)
+        reply("請提供體重或身高，例如：寶寶今天體重3060g。")
         return "clarify"
 
     if result["action"] == "clarify":
         question = result.get("clarification") or "你想記錄哪一項寶寶照護呢？"
-        safe_reply_to_line(reply_token, question, replier)
+        reply(question)
         return "clarify"
 
     if result["action"] == "ignore":
-        safe_reply_to_line(reply_token, "我目前只會幫忙記錄寶寶照護喔。", replier)
+        reply("我目前只會幫忙記錄寶寶照護喔。")
         return "ignored"
 
     if result["action"] == "correct_record":
         record = replace_latest_record_from_parse_result(result)
         if record is None:
-            safe_reply_to_line(reply_token, "找不到可更正的同類紀錄。", replier)
+            reply("找不到可更正的同類紀錄。")
             return "correction_not_found"
-        safe_reply_to_line(
-            reply_token,
-            format_created_reply(record).replace("已記錄：", "已更正：", 1),
-            replier,
-        )
+        reply(format_created_reply(record).replace("已記錄：", "已更正：", 1))
         return "corrected"
 
     record = create_record_from_parse_result(result)
-    safe_reply_to_line(reply_token, format_created_reply(record), replier)
+    reply(format_created_reply(record))
     return "created"
 
 

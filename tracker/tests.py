@@ -17,6 +17,7 @@ from .ai_parser import (
     OpenAIRequestError,
     parse_care_record_message,
 )
+from .line_client import LineReplyError
 from .models import Baby, CareRecord
 from .views import (
     handle_line_text_event,
@@ -273,6 +274,99 @@ class LineTextEventHandlerTests(TestCase):
         self.assertEqual(replies[0][0], "reply-token")
         self.assertIn("已記錄", replies[0][1])
         self.assertIn("90ml", replies[0][1])
+
+    def test_prefers_push_over_reply_when_source_user_id_present(self):
+        pushes = []
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "feeding",
+                "time": "2026-06-04T09:15",
+                "note": "",
+                "feed_kind": "奶瓶",
+                "feed_amount": "90ml",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        def fake_push(user_id, text):
+            pushes.append((user_id, text))
+            return True
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "source": {"type": "user", "userId": "U123"},
+            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+        }
+
+        with patch("tracker.views.push_to_line", fake_push):
+            status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "created")
+        self.assertEqual(CareRecord.objects.count(), 1)
+        self.assertEqual(pushes, [("U123", pushes[0][1])])
+        self.assertIn("已記錄", pushes[0][1])
+        self.assertEqual(replies, [])
+
+    def test_falls_back_to_reply_when_push_fails(self):
+        replies = []
+
+        def parser(message):
+            return {
+                "action": "create_record",
+                "record_type": "feeding",
+                "time": "2026-06-04T09:15",
+                "note": "",
+                "feed_kind": "奶瓶",
+                "feed_amount": "90ml",
+                "sleep_minutes": None,
+                "pee": False,
+                "poop": False,
+                "poop_amount": "",
+                "poop_color": "",
+                "temperature": "",
+                "symptom": "",
+                "weight": "",
+                "height": "",
+                "clarification": "",
+            }
+
+        def replier(reply_token, text):
+            replies.append((reply_token, text))
+            return True
+
+        def failing_push(user_id, text):
+            raise LineReplyError("push failed")
+
+        event = {
+            "type": "message",
+            "replyToken": "reply-token",
+            "source": {"type": "user", "userId": "U123"},
+            "message": {"type": "text", "text": "剛剛喝奶 90ml"},
+        }
+
+        with patch("tracker.views.push_to_line", failing_push):
+            status = handle_line_text_event(event, parser=parser, replier=replier)
+
+        self.assertEqual(status, "created")
+        self.assertEqual(CareRecord.objects.count(), 1)
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(replies[0][0], "reply-token")
 
     def test_line_reply_write_error_does_not_block_record_creation(self):
         def parser(message):

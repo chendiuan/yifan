@@ -316,6 +316,7 @@ h2 {
 .baby-card,
 .profile-panel,
 .summary-panel,
+.trends-panel,
 .entry-panel,
 .day-table-panel,
 .growth-chart-panel,
@@ -329,6 +330,7 @@ h2 {
 
 .profile-panel,
 .summary-panel,
+.trends-panel,
 .entry-panel,
 .day-table-panel,
 .growth-chart-panel,
@@ -457,6 +459,7 @@ h2 {
 
 .profile-panel,
 .summary-panel,
+.trends-panel,
 .entry-panel,
 .day-table-panel,
 .growth-chart-panel,
@@ -567,6 +570,39 @@ textarea {
 
 .weight-detail strong {
   color: var(--teal);
+}
+
+.trends-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.trends-table th,
+.trends-table td {
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.trends-table thead th {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  border-bottom: 1px solid var(--line);
+}
+
+.trends-table tbody td:first-child {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.trends-table tbody td:not(:first-child) {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--line);
 }
 
 .section-heading {
@@ -1168,6 +1204,7 @@ textarea {
 
   .profile-panel,
   .summary-panel,
+  .trends-panel,
   .entry-panel,
   .day-table-panel,
   .growth-chart-panel,

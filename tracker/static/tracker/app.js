@@ -77,6 +77,12 @@ const els = {
   feedGap: document.querySelector("#feedGap"),
   longestSleep: document.querySelector("#longestSleep"),
   latestTemp: document.querySelector("#latestTemp"),
+  weeklyFeedAvg: document.querySelector("#weeklyFeedAvg"),
+  monthlyFeedAvg: document.querySelector("#monthlyFeedAvg"),
+  weeklyPeeAvg: document.querySelector("#weeklyPeeAvg"),
+  monthlyPeeAvg: document.querySelector("#monthlyPeeAvg"),
+  weeklyPoopAvg: document.querySelector("#weeklyPoopAvg"),
+  monthlyPoopAvg: document.querySelector("#monthlyPoopAvg"),
   recordForm: document.querySelector("#recordForm"),
   recordTime: document.querySelector("#recordTime"),
   recordsList: document.querySelector("#recordsList"),
@@ -143,6 +149,8 @@ function formatTime(iso) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
   }).format(new Date(iso));
 }
 
@@ -420,6 +428,71 @@ function renderSummary() {
   els.feedGap.textContent = calculateFeedGap(feedings);
 }
 
+function computeCareAverages(periodDays) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = localDateKey(today);
+
+  const windowStart = new Date(today);
+  windowStart.setDate(windowStart.getDate() - (periodDays - 1));
+  const windowStartKey = localDateKey(windowStart);
+
+  const inRange = state.records.filter((record) => {
+    const key = recordDateKey(record.time);
+    return key >= windowStartKey && key <= todayKey;
+  });
+
+  // Average over the days we actually have data for within the window,
+  // rather than diluting by the full window when the log is newer than
+  // the requested period (e.g. a baby born 10 days ago viewed over 30 days).
+  let effectiveStartKey = windowStartKey;
+  const recordKeys = inRange.map((record) => recordDateKey(record.time));
+  if (recordKeys.length) {
+    const earliestRecordKey = recordKeys.reduce((min, key) => (key < min ? key : min), todayKey);
+    if (earliestRecordKey > windowStartKey) {
+      effectiveStartKey = earliestRecordKey;
+    }
+  }
+
+  const daySpan = Math.max(
+    1,
+    Math.round((dateFromKey(todayKey) - dateFromKey(effectiveStartKey)) / 86400000) + 1
+  );
+
+  const feedings = inRange.filter((record) => record.type === "feeding");
+  const diapers = inRange.filter((record) => record.type === "diaper");
+  const totalFeedMl = feedings.reduce((sum, record) => sum + parseFeedMl(record.feedAmount), 0);
+  const peeCount = diapers.filter(hasPee).length;
+  const poopCount = diapers.filter(hasPoop).length;
+
+  return {
+    feedMlPerDay: totalFeedMl / daySpan,
+    peePerDay: peeCount / daySpan,
+    poopPerDay: poopCount / daySpan,
+    hasData: inRange.length > 0,
+  };
+}
+
+function formatAverageMl(value) {
+  return `${value.toFixed(0)} ml`;
+}
+
+function formatAverageCount(value) {
+  return `${value.toFixed(1)} 次`;
+}
+
+function renderTrends() {
+  const weekly = computeCareAverages(7);
+  const monthly = computeCareAverages(30);
+
+  els.weeklyFeedAvg.textContent = weekly.hasData ? formatAverageMl(weekly.feedMlPerDay) : "尚無資料";
+  els.monthlyFeedAvg.textContent = monthly.hasData ? formatAverageMl(monthly.feedMlPerDay) : "尚無資料";
+  els.weeklyPeeAvg.textContent = weekly.hasData ? formatAverageCount(weekly.peePerDay) : "尚無資料";
+  els.monthlyPeeAvg.textContent = monthly.hasData ? formatAverageCount(monthly.peePerDay) : "尚無資料";
+  els.weeklyPoopAvg.textContent = weekly.hasData ? formatAverageCount(weekly.poopPerDay) : "尚無資料";
+  els.monthlyPoopAvg.textContent = monthly.hasData ? formatAverageCount(monthly.poopPerDay) : "尚無資料";
+}
+
 function renderGrowthChart() {
   const metric = state.growthMetric;
   const period = state.growthPeriod;
@@ -677,6 +750,7 @@ function renderAll() {
   renderDateNavigation();
   renderProfile();
   renderSummary();
+  renderTrends();
   renderGrowthChart();
   renderDayTable();
   renderRecords();
